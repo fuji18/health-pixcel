@@ -11,14 +11,20 @@
 
 ## 技術スタック
 
-- 開発環境: devcontainer
-- Node.js v24(devcontainer / CI / `engines` で固定)
-- TypeScript 6.x
-- パッケージマネージャー: npm
-
-※ テンプレート既定値。プロジェクト開始時(`/kickoff`)にアイデアの技術選定と突き合わせ、実態に更新する。
+- アプリ: Flutter 3.47.6 / Dart 3.13(Android のみ。minSdk 34)。詳細は `docs/architecture.md`
+- 開発環境: devcontainer(Flutter SDK は `post_create.sh` が `~/flutter` に導入。Android SDK は無い)。実機実行・リリース APK の実機確認は Windows 側(Android Studio)
+- 検証コマンド: `flutter analyze` / `dart format --output=none --set-exit-if-changed .` / `flutter test` / `bash scripts/check-*.sh`。`npm run lint` / `npm run format:check` / `npm test` は同じものを呼ぶ入口
+- Node.js v24 + npm は**ハーネス専用**(husky / lint-staged / secretlint / prettier、Claude Code・Codex・Context7)。アプリは Node に依存しない
 
 ## プロジェクト固有ルール
+
+### テンプレート所有ファイルへの Flutter 差分(`/sync-template` 時に当て直す)
+
+次のファイルはテンプレート所有(`owned`)だが、Flutter スタック向けに書き換えてある。`/sync-template` で上書きされたら、取り込み後に下記の差分を当て直す(経緯: `.steering/20261006-flutter-stack-migration/`)。
+
+- `.github/workflows/ci.yml`: `quality` ジョブ(Flutter の format / analyze / test / scripts / リリースビルド / 権限検査。`pubspec.yaml` 不在時はスキップ。secretlint は Node で継続)
+- `.claude/scripts/lint-on-edit.sh`: 対象を `*.dart` に、検査を `dart analyze <file>` に
+- `.claude/hooks/session-start.sh`: リモート時の `flutter pub get` と、serena 規模検知の対象拡張子 `*.dart`
 
 <!-- ここはプロジェクト所有。テンプレート同期で消えません。
      追記先の例: MCP の使いどころ(/kickoff フェーズ1.5)、スポーク構成ルールへの参照(/setup-spoke-standards)、

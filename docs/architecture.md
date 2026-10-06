@@ -46,13 +46,13 @@
 
 | 実行主体 | 環境 | 実行するもの |
 |---|---|---|
-| 開発者(手元) | Windows 11 + Flutter SDK + Git Bash | すべて(実機確認・`flutter run` を含む) |
-| Claude Code(司令塔・`implement-ticket` の fork・`/check`) | 同じ Windows 機のシェル(Git Bash) | `flutter analyze` / `dart format` / `flutter test` / `scripts/*.sh`。リリースビルドは依存・マニフェスト・Gradle を変えたときだけ |
+| 開発者(手元) | Windows 11 + Flutter SDK + Android Studio + Git Bash | 実機確認・`flutter run`・リリースビルドと権限検査(Android SDK が要るもの) |
+| Claude Code(司令塔・`implement-ticket` の fork・`/check`) | devcontainer(Linux。Flutter SDK は `post_create.sh` が `~/flutter` に導入。**Android SDK は無い**) | `flutter analyze` / `dart format` / `flutter test` / `scripts/check-layer-imports.sh` / `scripts/check-privacy.sh`。リリースビルドと `check-release-permissions.sh` は実行できないため、CI と開発者(Windows)に任せる |
 | Codex 委託 | sandbox(ネットワーク無効) | 依存取得済み(`flutter pub get` 済み)の状態で analyze / format / test のみ。依存追加を伴うチケットは委託しない。プライバシーの判定実体(`scripts/` と `android/app/src/*/AndroidManifest.xml`)は委託禁止領域とし、`/kickoff` フェーズ4 で `AGENTS.md` §4 のプロジェクト固有パスに登録する |
-| git hook(lint-staged) | 開発者・Claude と同じシェル | `*.dart` に `dart format`(`dart` が PATH にあることが前提) |
+| git hook(lint-staged) | コミットするシェル(devcontainer / Windows) | `*.dart` に `dart format`(`dart` が PATH にあることが前提) |
 | CI(GitHub Actions) | ubuntu + `subosito/flutter-action` | 上記すべての検証コマンド + リリースビルド + 権限検査 |
 
-- `.devcontainer/` はテンプレート由来で Node.js 前提のまま。Flutter の開発には使わない(Android 実機と USB 接続するため)。扱いは `/kickoff` フェーズ1で決める
+- `.devcontainer/` には Node(ハーネス用)と Flutter SDK を入れる。Android 実機との USB 接続とリリースビルドは Windows 側で行う(2026-10-06 決定。`.steering/20261006-flutter-stack-migration/`)
 - `scripts/*.sh` は Git Bash と ubuntu の両方で動く POSIX シェルで書く
 
 ## アーキテクチャパターン

@@ -25,6 +25,15 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f package.json ] && [ ! -d node_
     echo "⚠️ npm install に失敗した。検証コマンドの実行前に原因を確認すること"
   fi
 fi
+# health-pixcel: Flutter の依存(pubspec.yaml 生成後・flutter がある環境のみ。.dart_tool があればスキップ)
+# ⚠️ .claude/hooks/ はテンプレート所有(owned)。/sync-template で上書きされたら当て直す
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] && [ -f pubspec.yaml ] && [ ! -d .dart_tool ] && command -v flutter >/dev/null 2>&1; then
+  if flutter pub get 1>&2; then
+    echo "依存関係: flutter pub get 完了(リモート環境)"
+  else
+    echo "⚠️ flutter pub get に失敗した。検証コマンドの実行前に原因を確認すること"
+  fi
+fi
 
 # --- ハーネスの自壊検知: hook スクリプトの実行権限が落ちていないか ---
 # PreToolUse hook は実行失敗時にフェイルオープン(素通り)になるため、ここで警告する。
@@ -140,10 +149,11 @@ fi
 # しきい値と判断材料・再導入手順は .claude/docs/serena-reintroduction.md を参照
 # (.mcp.json には context7 等の他サーバーもあるため、serena エントリの有無で判定する)
 if [ "$SOURCE" = "startup" ] && ! grep -qs '"serena"' .mcp.json; then
-  TS_FILES="$(git ls-files '*.ts' '*.tsx' 2>/dev/null | wc -l)"
-  TS_LOC="$(git ls-files '*.ts' '*.tsx' 2>/dev/null | xargs -r cat 2>/dev/null | wc -l)"
+  # health-pixcel: 対象は Dart(TS からの置換)
+  TS_FILES="$(git ls-files '*.dart' 2>/dev/null | wc -l)"
+  TS_LOC="$(git ls-files '*.dart' 2>/dev/null | xargs -r cat 2>/dev/null | wc -l)"
   if [ "${TS_LOC:-0}" -gt 30000 ] || [ "${TS_FILES:-0}" -gt 300 ]; then
-    echo "コード規模が serena MCP 再導入の目安を超えた(TS: ${TS_LOC} 行 / ${TS_FILES} ファイル)。.claude/docs/serena-reintroduction.md を読み、再導入をユーザーに提案すること"
+    echo "コード規模が serena MCP 再導入の目安を超えた(Dart: ${TS_LOC} 行 / ${TS_FILES} ファイル)。.claude/docs/serena-reintroduction.md を読み、再導入をユーザーに提案すること"
   fi
 fi
 

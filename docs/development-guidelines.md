@@ -340,6 +340,7 @@ bash scripts/check-release-permissions.sh
 | Android Studio | 最新 stable | 公式サイト(Android SDK・JDK 17 を同梱) |
 | Git for Windows | 最新 | 公式サイト(Git Bash で `scripts/*.sh` を実行する) |
 | Node.js | v24 | ハーネス(husky / secretlint)用。アプリには不要 |
+| devcontainer | — | Claude Code の実行環境。Flutter SDK は `post_create.sh` が導入する(Android SDK は入れない) |
 | Pixel 10 | Android 16 以降 | 開発者オプションで USB デバッグを有効化 |
 
 ### セットアップ手順

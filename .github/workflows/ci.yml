@@ -157,39 +157,97 @@ jobs:
 
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      # ハーネス(secretlint)用。アプリ本体は Flutter で、Node には依存しない
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
 
-      - name: Install dependencies
+      - name: Install harness dependencies
         run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Format check
-        run: npm run format:check
-
-      - name: Test
-        run: npm test
 
       - name: Secret scan
         run: npx secretlint "**/*"
 
-      # 上流の advisory 公開で依存と無関係な PR が赤くならないよう非ブロッキングにする
-      # (依存更新自体は dependabot が担う。警告は Actions の annotation で確認できる)
-      - name: Dependency audit
+      # Flutter プロジェクトは最初の実装チケットで生成される。生成前の PR を赤くしないため、
+      # pubspec.yaml の有無で以降の Flutter 手順を出し分ける
+      - name: Detect Flutter project
+        id: flutter
+        run: |
+          if [ -f pubspec.yaml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::pubspec.yaml が無いため Flutter の検証をスキップします(最初の実装チケットで生成される)"
+          fi
+
+      # バージョンは docs/architecture.md と .devcontainer/post_create.sh に揃える
+      - name: Setup Java
+        if: steps.flutter.outputs.present == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        if: steps.flutter.outputs.present == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.6
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        if: steps.flutter.outputs.present == 'true'
+        run: flutter pub get
+
+      - name: Format check
+        if: steps.flutter.outputs.present == 'true'
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        if: steps.flutter.outputs.present == 'true'
+        run: flutter analyze
+
+      - name: Test
+        if: steps.flutter.outputs.present == 'true'
+        run: flutter test
+
+      # scripts/ は実装チケットで追加される。存在するものだけ実行する
+      - name: Layer and privacy checks
+        if: steps.flutter.outputs.present == 'true'
+        run: |
+          for s in scripts/check-layer-imports.sh scripts/check-privacy.sh; do
+            if [ -f "$s" ]; then
+              bash "$s"
+            else
+              echo "::notice::$s が無いためスキップします"
+            fi
+          done
+
+      - name: Release build
+        if: steps.flutter.outputs.present == 'true'
+        run: flutter build apk --release
+
+      # PRD 最重要要件: リリース APK に INTERNET 権限が無いこと
+      - name: Release permission check
+        if: steps.flutter.outputs.present == 'true'
+        run: |
+          if [ -f scripts/check-release-permissions.sh ]; then
+            bash scripts/check-release-permissions.sh
+          else
+            echo "::warning::scripts/check-release-permissions.sh が無いため、リリース APK の権限検査を実行していません"
+          fi
+
+      # 上流の advisory 公開で無関係な PR が赤くならないよう非ブロッキングにする
+      - name: Dependency audit (harness)
         continue-on-error: true
         run: npm audit --audit-level=high

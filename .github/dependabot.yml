@@ -1,6 +1,13 @@
-# テンプレートの鮮度維持: 依存関係・Actions・devcontainer を週次でチェックする
+# 依存関係・Actions・devcontainer を週次でチェックする(プロダクト向けの monthly 化は /kickoff フェーズ4)
 version: 2
 updates:
+  # アプリ本体(Flutter)。pubspec.yaml は最初の実装チケットで生成される
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+
+  # ハーネス専用(husky / lint-staged / secretlint / prettier)
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -9,11 +16,6 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
-    ignore:
-      # typescript-eslint の peer 制約(TS 6 系まで)を超える major 更新は
-      # ツールチェーン側が追随するまで受け付けない(npm ci が ERESOLVE で失敗する)
-      - dependency-name: typescript
-        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
