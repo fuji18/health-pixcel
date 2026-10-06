@@ -1,0 +1,87 @@
+<!-- テンプレート所有ファイル: /sync-template で上書きされます。プロジェクト固有のルールは CLAUDE.md の「プロジェクト固有ルール」節に書いてください。 -->
+<!-- 司令塔専用: SessionStart hook がメインセッションにのみ注入します。サブエージェントには読み込まれません。 -->
+
+## 委託の振り分け(どの単位で Codex に渡すか)
+
+**委託先の既定**は `model-strategy.md` に書いてある(既定 = Codex の `delegate-codex.sh`、`exit 3` なら `implement-ticket` の Sonnet fork)。**このファイルが決めるのは「どの単位で渡すか」**。判定軸はモデルの賢さではなく**往復コスト**で、「仕様が書き切れているか × 途中で設計判断が発生するか」で決める。
+
+| 粒度 | 経路 | 適する作業 | 判定基準(when X) |
+| --- | --- | --- | --- |
+| **tasklist 1〜3 項目** | `delegate-codex.sh impl` | 定型 CRUD・既存パターンの横展開・リネーム/移行リファクタ・仕様確定済みのテスト追加 | `design.md` に手順まで書けている / 受け入れ確認が `/check` で機械的に済む |
+| **チケット 1 枚**(1 Issue = 1 PR) | 同上 + **`delegate:codex` ラベル** | 依存なし(`depends:` 全 closed)・受け入れ条件が Issue に完結・想定差分 300 行以下・**委託禁止領域に触れない**定型機能 | Issue を読んだ第三者が質問なしで実装できると司令塔が判断したとき |
+| **行き詰まり調査** | `delegate-codex.sh explore` | 根本原因不明のバグで 2 回連続で修正に失敗したもの | 仮説を書き出してから委譲する |
+| **重要変更のレビュー** | `delegate-codex.sh review` | 200 行以上かつ認証・決済・データ移行・アーキテクチャ変更 | **判断の実体は `review-policy.md`「200 行以上 かつ 重要変更」の項。** ここでは粒度だけを示す |
+| **委託しない** | — | **委託禁止領域**(下の一覧)/ **新規依存の追加**(sandbox はネットワーク無効)/ **`.git` を書き換えるタスク**(`workspace-write` では index 操作が必ず失敗する) | ユーザー承認や設計判断の往復が予想されるなら粒度を下げるか fork に残す |
+
+- **最小は「tasklist 1 項目」より下げない。** 関数単位の委託は起動 + 検収コストが生成コストを上回る
+- **最大は「1 Issue」で止める。** 複数チケットの一括委託は検収単位が PR 1 本を超え、レビュー精度もマージ判断も破綻する
+- 並行数は **1 本まで**(同一ワーキングツリーを共有するため)。impl は入口検査5-5 が機械的に止める(別ステアリングへの並行委託も `exit 2`)。read-only の explore / review はこの検査を通らず並行できる。**並行しても impl の出口検査は誤爆しない**(run record は内容ハッシュ比較の対象外で、既存 record の `accepted` / `status` だけを突き合わせる。#81)。ただし impl の実行中は `codex-run.sh` の書き込み系(`accept` / `set-status` / `prune`)が拒否される。
+
+### 委託禁止領域(パス一覧)
+
+事故のコストが高い領域は委託しない。**単一ソースはここではない** —— 汎用項目は
+`delegate-codex.sh` の `FORBIDDEN_PATHS`、プロジェクト固有パス(認証・決済・データ移行などの実パス)は
+`AGENTS.md` §4 のマーカー内が正で、`/kickoff` フェーズ4 が書く。下の表は**汎用項目だけ**の写しで、
+司令塔が振り分けを判断するために置いてある(CI の `harness-integrity` ジョブが双方向で照合する)。
+プロジェクト固有パスを含む全量は `bash .claude/scripts/delegate-codex.sh --print-forbidden` で出る。
+**なぜそのパスなのか**の詳細は `docs/template-dev/codex-delegation-plan.md` §9.1。
+
+<!-- forbidden-paths -->
+| パス | 渡さない理由(1 行) |
+| --- | --- |
+| `.claude/scripts/` | 委託の唯一の入口・保護ブランチ判定・CI が `bash` で呼ぶ判定の実体。1 行の書き換えで検査が静かに無効化される |
+| `.claude/hooks/` | PreToolUse / SessionStart hook の実体。司令塔コンテキストへの注入元でもある |
+| `.claude/settings.json` | hook の定義そのもの(どのコマンドを止めるかの宣言) |
+| `.claude/settings.local.json` | 同上。gitignore 済みで `git diff` に出ないが、次に人間がセッションを開いた瞬間にホストで走る |
+| `.claude/branch-policy.json` | 保護ブランチ検査の全 3 層が読む判定データ。書き換われば全層が「正常に動作したうえで素通し」する |
+| `.claude/rules/` | 司令塔と全サブエージェントのコンテキストへ本文がそのまま注入される |
+| `.husky/` | ベンダー中立ガードレールの本体と、git が実際に起動する入口(`.husky/_/`。git 追跡外) |
+| `.claude/codex-denylist.txt` | 委託先が自分の送信禁止リストを編集できてはならない |
+| `AGENTS.md` | 委託先の憲法。冒頭の verify-probe は次回委託時にホスト上で読まれる |
+| `CLAUDE.md` | 全エージェントに毎回ロードされる = `rules/` と同じ注入経路 |
+| `.mcp.json` | MCP サーバ定義 = セッション開始時のローカルプロセス起動指示 |
+| `.github/workflows/` | 非 fork PR で `CLAUDE_CODE_OAUTH_TOKEN` にアクセスできる定義そのもの |
+| `.codex/` | Codex 側の設定(`network_access` 等)とモード C の手順書 |
+| `.harness/mode` | 委託先がハーネスモードを詐称できてはならない |
+| `.harness/codex-runs/` | 委託先が自分の結果を `accepted` に書き換えられてはならない |
+<!-- /forbidden-paths -->
+
+**機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで
+委託を止めるフェイルクローズ検査、こちらは司令塔が「どのチケットを渡すか」を決める振り分け判断。
+
+### 損益分岐(粒度を満たしていても常に得ではない)
+
+> **「`design.md` を書き切るコスト」<「実装ループのコスト」を満たすときだけ委託する。**
+
+- **既存パターンの横展開**は設計記述が薄くて済む(「A と同じ形で B を作る」)ので成立しやすい
+- **新規パターンの 1 例目**は設計記述が厚くなるので成立しない。「参照実装は司令塔が書く」(`model-strategy.md`)と同じ結論になる
+
+### バッチ運用と `delegate:codex`
+
+| チケットの状態 | 実装フェーズの流し方 |
+| --- | --- |
+| **`delegate:codex` あり** | tasklist を**分割せず 1 回の委託で全体を流す**。検収は PR 単位で 1 回 |
+| ラベルなし | 機械的な項目が **3 つ以上連続したら 3 項目前後のバッチ**で委託し、**各バッチの検収を通してから次を委託する**(検収を挟まずに流すと前バッチの欠陥の上に次バッチが積まれる) |
+| 機械的な項目が 2 つ以下 | Codex に渡さず `implement-ticket` の fork に渡す |
+
+### ラベルの付け外し(司令塔の判断)
+
+- **付ける**: `/setup-tickets` の発行時(条件が明らかなときだけ)、または `/next-ticket` で `design.md` を書き切った時点
+- **外す**: 計画中に禁止領域・新規依存・未確定の設計判断が判明したとき → `gh issue edit [番号] --remove-label delegate:codex`
+- **外さない**: `exit 3`(Codex 利用不可)。環境の欠落であってチケットの属性ではない。Sonnet fork にフォールバックするだけ
+- **委託が効き始めるのは「真似できる既存パターンが揃った後」**。P0 の基盤チケットには原則付けない。ただし司令塔が参照実装を作り `/check` の検証コマンドが確立した時点からは、P0 の残りの同型タスクにも付けてよい(実質条件はフェーズ名ではなく「参照実装と検収インフラの有無」)
+
+### 実測の記録
+
+チケット完了時に `.harness/decisions.jsonl` へ 1 行追記する(委託先・往復回数・検収の指摘数・`/usage` の週枠使用率 → `docs/template-dev/econ-measurement.md`)。**上の閾値は初期値**であり、この実測で上下させる。
+
+**書くのは PR を出す前**(検収が終わり、往復回数と指摘数が確定した時点)。マージ後に回すと記録そのものが落ちる — #23 は司令塔が検収指摘の反映まで自分で手を動かし、通常の検収フローから外れた分岐で欠落した。事後に埋めても `review_findings` は再構成値にしかならず、他エントリと精度が揃わない。
+
+この 2 つの記録は CI(`.github/workflows/record-hygiene.yml`)が機械的に検査する。判定の実体は `.claude/scripts/check-record-hygiene.sh` で、環境変数を渡せば手元でも同じ結果を再現できる。
+
+| 検査 | 落ちる条件 | 逃げ道ラベル |
+| --- | --- | --- |
+| `docs/template-dev/CHANGELOG.md` | `.claude/` / `.husky/` / `.codex/` / `.github/workflows/` / `AGENTS.md` を変更した PR で CHANGELOG が未更新 | `no-changelog` |
+| `.harness/decisions.jsonl` | PR が `ticket` ラベル付き Issue を `Closes #N` でクローズするのに `"issue": N` の行が無い | `no-decision-record` |
+
+**逃げ道ラベルは司令塔が理由を添えて付ける。** 鳴りっぱなしを避けるための弁であって、既定の回避手段ではない。

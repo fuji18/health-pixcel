@@ -1,0 +1,195 @@
+name: CI
+
+# 機械的な品質ゲート(lint / 型チェック / フォーマット / テスト)。
+# Claude によるレビュー(claude-code-review.yml)とは独立して常に走る。
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ブランチ戦略の最終防衛線。hook はセッション内でしか効かず、クライアント
+  # (CLI / アプリのリモートセッション / GitHub 上の操作)によって挙動が揺れるため、
+  # マージ前に必ず通るこの層で base ブランチとブランチ名を機械的に検証する。
+  branch-policy:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Validate branch policy
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          POLICY=.claude/branch-policy.json
+          if [ ! -f "$POLICY" ]; then
+            echo "::notice::$POLICY が無いためブランチポリシー検査をスキップします"
+            exit 0
+          fi
+
+          BASE=$(jq -r '.baseBranch // "main"' "$POLICY")
+          RELEASE_BASE=$(jq -r '.releaseBase // "main"' "$POLICY")
+
+          # リリース系ブランチ(develop / release/* / hotfix/*)からの PR は releaseBase が正
+          EXPECTED="$BASE"
+          while IFS= read -r p; do
+            [ -z "$p" ] && continue
+            case "$HEAD_REF" in "$p"*) EXPECTED="$RELEASE_BASE" ;; esac
+          done < <(jq -r '.releasePrefixes // [] | .[]' "$POLICY")
+
+          # ポリシー上のベースが未作成のリポジトリでは検査しない(テンプレート導入直後など)
+          if ! git ls-remote --exit-code --heads origin "$EXPECTED" >/dev/null 2>&1; then
+            echo "::notice::ベースブランチ '$EXPECTED' が存在しないため base 検査をスキップします"
+          elif [ "$BASE_REF" != "$EXPECTED" ]; then
+            echo "::error::PR のベースが '$BASE_REF' ですが、ポリシー上は '$EXPECTED' です($POLICY)。アプリのリモートセッションは既定ブランチ起点でセッションを作るため base の指定漏れが起きやすい点に注意してください。意図的な変更ならポリシーファイル側を更新してください。"
+            exit 1
+          fi
+
+          # ブランチ名の接頭辞(claude/* はプラットフォーム生成ブランチとして正規に許可する)
+          if ! jq -e --arg h "$HEAD_REF" '[.allowedPrefixes[] | . as $p | select($h | startswith($p))] | length > 0' "$POLICY" >/dev/null; then
+            ALLOWED=$(jq -r '.allowedPrefixes | join(", ")' "$POLICY")
+            echo "::error::ブランチ名 '$HEAD_REF' がポリシーの接頭辞に一致しません(許可: $ALLOWED)"
+            exit 1
+          fi
+
+          echo "ブランチポリシー OK: $HEAD_REF -> $BASE_REF"
+
+  # ハーネスの自壊検知。quality から独立させているのは、lint やテストの失敗で
+  # この検査が実行されずに終わる(fail-fast で後続ステップが飛ぶ)のを避けるため。
+  # ガードレールが消えている PR ほど他のチェックも落ちやすく、最も検知したい場面で
+  # 検知できなくなる。依存のインストールも要らないので独立ジョブの方が速い。
+  harness-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # hook スクリプトの実行権限と settings.json の構文を検証する
+      # (PreToolUse hook は実行失敗時にフェイルオープンになるため、CI で機械的に担保する)
+      - name: Validate harness integrity
+        run: |
+          jq . .claude/settings.json > /dev/null
+          # .claude/scripts/lib-*.sh は source 専用の共有ライブラリ(#45)。
+          # 実行ビットを免除するのではなく、種別ごとに要件を分ける。
+          # 「lib- に改名すれば実行ビット検査を逃れられる」抜け道を作らないため、
+          # ライブラリ側には非実行 + shebang 無しという別の縛りを課す。
+          for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
+            [ -f "$s" ] || continue
+            case "$(basename "$s")" in
+              lib-*.sh)
+                if [ -x "$s" ]; then
+                  echo "::error::source 専用ライブラリに実行権限が付いています: $s — git update-index --chmod=-x $s を実行してコミットし直してください"
+                  exit 1
+                fi
+                if head -n 1 "$s" | grep -q '^#!'; then
+                  echo "::error::source 専用ライブラリに shebang があります: $s — lib-*.sh は単体で起動しない前提です。実行される実体なら lib- 以外の名前にしてください"
+                  exit 1
+                fi
+                ;;
+              *)
+                if [ ! -x "$s" ]; then
+                  echo "::error::hook スクリプトに実行権限がありません: $s — ローカルで chmod +x しても core.fileMode=false の環境では index に反映されません。git update-index --chmod=+x $s を実行してコミットし直してください"
+                  exit 1
+                fi
+                ;;
+            esac
+            bash -n "$s"
+          done
+
+          # ベンダー非依存の防衛線(.husky/* → check-protected-branch.sh)の検証。
+          # 同じ検査は SessionStart hook にもあるが、あちらは Claude セッション開始時に
+          # しか動かない = 検知自体がベンダー依存になる。Claude を一度も起動しない期間
+          # (他ツール単独での作業など)にこの層が消えても気づけないため、クライアント
+          # 非依存のこの層にも置く。.husky/ は template-manifest の merge 対象=手動統合
+          # であり、同期の誤りで呼び出しごと落ちやすい。
+          # 判定の実体は共有スクリプトに集約してある(SessionStart と同じ結果になることが要件)。
+          for f in .husky/pre-commit .husky/prepare-commit-msg; do
+            [ -f "$f" ] && bash -n "$f"
+          done
+
+          if ! ISSUES="$(bash .claude/scripts/check-guard-integrity.sh)"; then
+            printf '%s\n' "$ISSUES" | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
+            exit 1
+          fi
+
+      # 委託禁止領域の単一ソース(delegate-codex.sh の FORBIDDEN_PATHS)と
+      # .claude/rules/lead/delegation-policy.md の一覧のずれを**双方向**で検出する。
+      # マーカーを持たない旧版の delegation-policy.md を抱えた下流プロジェクトで
+      # ジョブが赤くならないよう、**警告に留める**(#64 / #83)。continue-on-error を
+      # 使わないのは、ステップ自体が失敗扱いになって UI に赤が出るため。
+      #
+      # 末尾の exit 0 は飾りではない。Actions の既定シェルは bash -e で、
+      # while ループは最後に実行したコマンドの終了コードを返す。出力が空のまま
+      # 検査が非ゼロで終わると(スクリプトの欠落・実行時エラー)ループ本体が
+      # 1 度も走らず read の失敗が返り、**メッセージ 1 行も無いままジョブが赤くなる**
+      # (司令塔が bash -e で単体再現して確認)。異常終了そのものは、それと分かる
+      # 警告 1 行に変換してから握り潰す。
+      - name: Check forbidden-paths documentation drift
+        run: |
+          SCRIPT=.claude/scripts/check-forbidden-paths-doc.sh
+          set +e
+          DRIFT="$(bash "$SCRIPT")"
+          RC=$?
+          set -e
+          if [ "$RC" -ne 0 ] && [ -z "$DRIFT" ]; then
+            echo "::warning::$SCRIPT が出力なしで異常終了しました(rc=$RC。スクリプトの欠落か実行時エラー)。委託禁止領域の記述ずれ検査が働いていません"
+          fi
+          printf '%s\n' "$DRIFT" | while IFS= read -r line; do
+            if [ -n "$line" ]; then echo "::warning::$line"; fi
+          done
+          exit 0
+
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Test
+        run: npm test
+
+      - name: Secret scan
+        run: npx secretlint "**/*"
+
+      # 上流の advisory 公開で依存と無関係な PR が赤くならないよう非ブロッキングにする
+      # (依存更新自体は dependabot が担う。警告は Actions の annotation で確認できる)
+      - name: Dependency audit
+        continue-on-error: true
+        run: npm audit --audit-level=high

@@ -1,0 +1,54 @@
+# Temporary files
+tmp/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+.nyc_output/
+
+# Steering files (.steering/) は履歴としてコミットする(CLAUDE.md の方針に従う)
+
+# Lock files (keep package-lock.json for consistency)
+# yarn.lock
+
+.claude/settings.local.json
+.claude/.lint-on-edit.lock
+
+# devcontainer が features 解決時に生成するロックファイル(環境ごとに揺れるため追跡しない)
+.devcontainer/devcontainer-lock.json
+
+# Codex 併用ハーネスのローカル状態
+# .harness/ を丸ごと無視しないこと: .harness/decisions.jsonl は
+# 「削除禁止・追記のみ」の永続ログで、追跡対象に残す必要がある。
+.harness/mode
+.harness/codex-runs/
