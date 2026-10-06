@@ -26,6 +26,18 @@
 - `.claude/scripts/lint-on-edit.sh`: 対象を `*.dart` に、検査を `dart analyze <file>` に
 - `.claude/hooks/session-start.sh`: リモート時の `flutter pub get` と、serena 規模検知の対象拡張子 `*.dart`
 
+### ハーネス(/harness-setup)
+
+モデル運用・委譲・レビューの使い分けは `.claude/rules/lead/*.md` に従う(ここで重ねて書かない)。追加の worker subagent と Agent Teams は使わない(2026-10-06 決定。プライバシーは `scripts/` の機械検査と同梱の `code-reviewer` で担保する)。
+
+**検証**: `npm run lint`(= `flutter analyze` + レイヤー検査 + プライバシー検査)/ `npm run format:check` / `npm test`。リリースビルドと `scripts/check-release-permissions.sh` は devcontainer では動かない(Android SDK なし)ため CI が担う。
+
+**必須ルール(when X, do Y)**:
+- `pubspec.yaml` に依存を追加・変更するときは、ネットワーク通信・解析(アナリティクス)SDK を含まないことを確認し、PR 本文に確認結果を書く。確認できないなら追加しない
+- `AndroidManifest.xml` の権限、または `scripts/check-release-permissions.sh` の許可リストを変えるときは、**先に** `docs/product-requirements.md`「セキュリティ・プライバシー」に理由を追記する
+- `// privacy-check: allow(<理由>)` を使ったら PR 本文で理由を説明する。レビューでは該当行を必ず確認する
+- マニフェスト・Gradle・依存を変えた PR は、CI のリリースビルドと権限検査が緑になるまで完了扱いにしない
+
 <!-- ここはプロジェクト所有。テンプレート同期で消えません。
      追記先の例: MCP の使いどころ(/kickoff フェーズ1.5)、スポーク構成ルールへの参照(/setup-spoke-standards)、
      ハーネス層の検証コマンド(/harness-setup)、共通ルールの上書き・例外。 -->
@@ -37,6 +49,7 @@
 - **一覧を出す**: `bash .claude/scripts/delegate-codex.sh --print-forbidden`(プロジェクト固有パスを含む全量)
 - **単一ソースは 2 系統**: 汎用項目 = `delegate-codex.sh` の `FORBIDDEN_PATHS` / プロジェクト固有パス = `AGENTS.md` §4 の `<!-- kickoff:delegation-forbidden-paths -->` マーカー内。**追加・変更はこの 2 箇所だけを直す**(出口検査が委託の開始時に両方を抽出してマージし、前後の内容ハッシュ差分を `status=failed` / `exit 2` で止める)
 - **振り分けの判断材料**(パス一覧と 1 行の理由)は `.claude/rules/lead/delegation-policy.md`、**なぜそのパスなのか**の詳細は `docs/template-dev/codex-delegation-plan.md` §9.1
+- **このプロジェクトの固有パス**: `scripts/`・`android/app/src/{main,release,debug,profile}/AndroidManifest.xml`・`android/app/build.gradle.kts`・`.devcontainer/`(プライバシー要件の判定実体と権限宣言、ホストで走る post_create)
 - **機密の送信禁止(`.claude/codex-denylist.txt`)とは別の層。** denylist は該当ファイルが存在するだけで委託を止めるフェイルクローズ検査、こちらは司令塔が「どのチケットを渡すか」を決める振り分け判断
 
 ## ディレクトリ構造(要点)

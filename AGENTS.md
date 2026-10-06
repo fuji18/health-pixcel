@@ -83,7 +83,7 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 
 ## 2. 検証コマンド
 
-<!-- verify-probe: exists node_modules/.bin/eslint -->
+<!-- verify-probe: exists .dart_tool/package_config.json -->
 
 > 上の行は `delegate-codex.sh` が読む機械可読マーカーです。**依存が入っているかどうかだけ**を確かめる 1 行を書いてください。
 >
@@ -107,10 +107,11 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 
 | 用途 | コマンド |
 | --- | --- |
-| lint | `npm run lint` |
-| 型チェック | `npm run typecheck` |
-| テスト | `npm test` |
-| フォーマット確認 | `npm run format:check` |
+| lint(静的解析・型を含む + レイヤー検査 + プライバシー検査) | `npm run lint`(= `flutter analyze` + `scripts/check-layer-imports.sh` + `scripts/check-privacy.sh`) |
+| テスト | `npm test`(= `flutter test`) |
+| フォーマット確認 | `npm run format:check`(= `dart format --output=none --set-exit-if-changed .`) |
+
+このプロジェクトは Flutter(Dart)です。npm の scripts は Flutter の検証コマンドへの入口で、型チェックは `flutter analyze` に含まれます。変更したファイルだけを整形するときは `dart format <ファイル>` を使ってください。
 
 **編集したら lint と format を回してください。** Claude の PostToolUse hook はあなたには効きません。
 
@@ -163,6 +164,10 @@ touch .git/.probe 2>/dev/null && rm -f .git/.probe && echo GIT_WRITABLE || echo 
 - `.github/workflows/` — CI 定義そのもの。ここを書き換えると認証済みトークンに触れられます
 - `.codex/` — あなた自身の設定(ネットワーク許可など)とモード C の手順書です
 - `.harness/mode` / `.harness/codex-runs/` — ハーネスモードと委託の実行記録。自分の結果を承認済みにすることはできません
+- `scripts/` — リリース APK の権限検査・レイヤー検査・プライバシー検査の実体です(健康データを端末の外に出さないという最重要要件の判定ロジック)。1 行の書き換えで検査が素通しになります
+- `android/app/src/main/AndroidManifest.xml` / `android/app/src/release/AndroidManifest.xml` / `android/app/src/debug/AndroidManifest.xml` / `android/app/src/profile/AndroidManifest.xml` — アプリが宣言する権限そのものです。ヘルスコネクトの権限を足すこと、release で INTERNET 権限を除去している宣言を消すことは、プライバシー要件の破壊に直結します
+- `android/app/build.gradle.kts` — minSdk・applicationId・依存の宣言で、権限が混入する経路にもなります
+- `.devcontainer/` — post_create.sh は次にコンテナを作り直したときにホスト側で実行されます
 <!-- /kickoff:delegation-forbidden-paths -->
 
 > 上の項目はテンプレート由来の**汎用項目**で、どのプロジェクトでも残ります(`delegate-codex.sh` と `.husky/` はすべてのプロジェクトに配布されるため)。プロダクト側のプロジェクトでは `/kickoff` フェーズ4 が、その下に**そのプロジェクトの実際のモジュールパス**(認証・決済・データ移行など)を**追記**します。マーカーの行自体も消さないでください。
