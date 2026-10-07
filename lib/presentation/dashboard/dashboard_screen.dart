@@ -6,6 +6,7 @@ import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/sleep_section.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/status_message.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/steps_section.dart';
+import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
 
 /// 唯一の画面。DashboardState に応じて表示を出し分ける。
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -92,6 +93,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           actions: [
             StatusAction('権限を許可する', _requestPermissions),
             StatusAction('ヘルスコネクトの設定を開く', _openSettings),
+            StatusAction('詳しく見る', _openRationale),
           ],
         ),
       ],
@@ -131,6 +133,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void _retry() => _controller.refresh();
 
   void _requestPermissions() => _controller.requestPermissions();
+
+  void _openRationale() => Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => const PermissionRationaleScreen()),
+  );
 
   Future<void> _openSettings() async {
     final opened = await _controller.openSettings();

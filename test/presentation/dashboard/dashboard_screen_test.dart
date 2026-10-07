@@ -10,6 +10,7 @@ import 'package:health_pixcel/presentation/dashboard/dashboard_controller.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_screen.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
 import 'package:health_pixcel/presentation/providers.dart';
+import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import '../../fakes/fake_health_repository.dart';
@@ -126,7 +127,7 @@ void main() {
     expect(find.text('データの読み取りのみ行い、端末の外には送信しません'), findsOneWidget);
     expect(find.text('権限を許可する'), findsOneWidget);
     expect(find.text('ヘルスコネクトの設定を開く'), findsOneWidget);
-    expect(find.text('詳しく見る'), findsNothing);
+    expect(find.text('詳しく見る'), findsOneWidget);
   });
 
   testWidgets('6 権限を許可すると再起動なしで表示される', (tester) async {
@@ -291,5 +292,19 @@ void main() {
       matchesSemantics(label: '歩数', isHeader: true),
     );
     handle.dispose();
+  });
+
+  testWidgets('17 詳しく見るから利用目的を開き、閉じるで戻る', (tester) async {
+    fake.permissions = bothDenied;
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('詳しく見る'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PermissionRationaleScreen), findsOneWidget);
+    expect(find.text('健康データの利用について'), findsOneWidget);
+    await tester.tap(find.text('閉じる'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PermissionRationaleScreen), findsNothing);
+    expect(find.text('歩数と睡眠を表示するには、ヘルスコネクトの読み取り権限が必要です'), findsOneWidget);
   });
 }
