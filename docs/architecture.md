@@ -207,6 +207,20 @@ domain       → (なし。dart:core と intl のみ)
 | ヘルスコネクト | `ACTIVITY_RECOGNITION` なしで歩数が読めること / `MANAGE_HEALTH_PERMISSIONS` でこのアプリの権限画面が開くこと |
 | `getHealthDataFromTypes(SLEEP_SESSION)` | 読み取り区間の開始より前に始まり区間内に終わるセッションが返るか(区間と重なるものが返るか、区間に収まるものだけか)。返る場合、機能設計書 A3 の「区間開始より前に始まるセッションは対象外」の注記を「返る」に改める |
 
+**確認結果(#6、`health` 13.3.2 のソースで確認。実機は未確認)**:
+
+| 項目 | 結果 | 設計への反映 |
+|---|---|---|
+| `getHealthConnectSdkStatus()` の enum 名 | `sdkUnavailable` / `sdkUnavailableProviderUpdateRequired` / `sdkAvailable`。ネイティブ呼び出しが失敗すると例外を握りつぶして `null` を返す | 設計どおり |
+| `getTotalStepsInInterval` の記録なし | 集計結果が無いと `0` を返す。ネイティブ側の例外は握りつぶして `null` を返す | **変更**: `0` → 記録なし、`null` → `readFailed`(機能設計書の表・A2) |
+| `Health().configure()` | 端末 ID(`deviceId`)を取得するだけ。読み取り自体には不要だが API 上「使用前に呼ぶ」とされている | 設計どおり 1 回だけ呼ぶ |
+| `hasPermissions`(Android, `READ`) | 付与済み権限の `containsAll` を `true`/`false` で返す(`null` は iOS 向け) | 設計どおり |
+| プラグイン自身のマニフェスト | 空(権限を追加しない)。推移的依存の権限はリリースビルドの権限検査(CI)で確認する | 変更なし |
+| `installHealthConnect()` | ネイティブ側の失敗を握りつぶす(`void`) | `openHealthConnectStore` が `false` になるのは Dart 側の例外のときだけ(機能設計書に注記) |
+| `getTotalStepsInInterval` の利用可否検査 | 他の読み取り API と違い `UnsupportedError` を投げない(利用不可時はネイティブ側の例外 → `null` → `readFailed`) | 変更なし(読み込み後の利用可否の再確認は #7 の `_fetch()` が行う) |
+
+実機での確認が必要な残り(`ACTIVITY_RECOGNITION` なしで歩数が読めること / `MANAGE_HEALTH_PERMISSIONS` で権限画面が開くこと / 睡眠セッションの区間の扱い)は #10 の実機検証で行う。
+
 **`android/app/src/release/AndroidManifest.xml`(リリースビルドのみ)**:
 
 ```xml
@@ -315,7 +329,7 @@ domain       → (なし。dart:core と intl のみ)
 ### ユニットテスト
 - **フレームワーク**: `flutter_test`
 - **対象**: ドメイン層の純粋関数、`WeeklySummaryService`、`DashboardController`(`ProviderContainer` に `healthRepositoryProvider` / `clockProvider` のフェイクを override して実行)
-- **カバレッジの目安**: ドメイン層・アプリケーション層で 90% 程度(`flutter test --coverage` で `coverage/lcov.info` を出し、必要に応じて確認する。CI のゲートにはしない)。データ層の `HealthConnectRepository` はプラグイン呼び出しのため対象外とし、実機確認で担保する
+- **カバレッジの目安**: ドメイン層・アプリケーション層で 90% 程度(`flutter test --coverage` で `coverage/lcov.info` を出し、必要に応じて確認する。CI のゲートにはしない)。データ層の `HealthConnectRepository` はフェイクの `Health` を注入して**変換規則(記録なし・不正セッションの破棄・例外の変換)だけ**をユニットテストし、プラグインとヘルスコネクトの実際の挙動は実機確認で担保する
 
 ### ウィジェットテスト
 - **フレームワーク**: `flutter_test`(`ProviderScope(overrides: ...)` でフェイクを注入)
