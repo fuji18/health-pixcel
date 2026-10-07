@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health/health.dart';
 import 'package:health_pixcel/data/health_connect_repository.dart';
@@ -99,6 +100,7 @@ Matcher _readException(HealthErrorKind kind) =>
     throwsA(isA<HealthReadException>().having((e) => e.kind, 'kind', kind));
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late _FakeHealth fake;
   late HealthConnectRepository repo;
   final start = DateTime(2026, 10, 5);
@@ -361,7 +363,25 @@ void main() {
     });
   });
 
-  test('openPermissionSettings は false', () async {
-    expect(await repo.openPermissionSettings(), isFalse);
+  group('openPermissionSettings', () {
+    const channel = MethodChannel('health_pixcel/health_connect_settings');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    test('チャネルが true を返せば true', () async {
+      final methods = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        methods.add(call.method);
+        return true;
+      });
+      expect(await repo.openPermissionSettings(), isTrue);
+      expect(methods, ['open']);
+    });
+
+    test('チャネルが false を返せば false', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => false);
+      expect(await repo.openPermissionSettings(), isFalse);
+    });
   });
 }

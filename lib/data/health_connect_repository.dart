@@ -1,14 +1,21 @@
 import 'package:health/health.dart';
 import 'package:health_pixcel/data/health_repository.dart';
+import 'package:health_pixcel/data/platform_channels.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
 
 /// [HealthRepository] の Android 実装(ヘルスコネクト。`health` パッケージ経由)。
 class HealthConnectRepository implements HealthRepository {
-  /// [health] はテストでフェイクを注入するための引数。省略時は `Health()`。
-  HealthConnectRepository({Health? health}) : _health = health ?? Health();
+  /// [health] / [settingsChannel] はテストでフェイクを注入するための引数。
+  HealthConnectRepository({
+    Health? health,
+    HealthConnectSettingsChannel? settingsChannel,
+  }) : _health = health ?? Health(),
+       _settingsChannel =
+           settingsChannel ?? const HealthConnectSettingsChannel();
 
   final Health _health;
+  final HealthConnectSettingsChannel _settingsChannel;
 
   // late final なので初回アクセス時に 1 度だけ configure() が走る(functional-design.md)。
   late final Future<void> _configured = _health.configure();
@@ -55,12 +62,8 @@ class HealthConnectRepository implements HealthRepository {
     return _readPermissions();
   });
 
-  /// 暫定実装。常に false を返す。
   @override
-  Future<bool> openPermissionSettings() async {
-    // #9 で MethodChannel(health_pixcel/health_connect_settings)の実装に置き換える
-    return false;
-  }
+  Future<bool> openPermissionSettings() => _settingsChannel.open();
 
   @override
   Future<bool> openHealthConnectStore() async {
