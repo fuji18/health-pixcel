@@ -246,7 +246,7 @@ Closes #5
 | ウィジェットテスト | `DashboardScreen` の状態別表示 | `flutter test` | 機能設計書「状態別の表示」の全行を 1 ケース以上 |
 | 実機確認 | ヘルスコネクトとの結合、HUAWEIヘルスケアとの数値の一致 | 手動(Pixel 10) | 機能設計書「実機確認」の全項目。リリース前と依存のメジャー更新時 |
 
-`HealthConnectRepository` は自動テストしない(`architecture.md`「テスト戦略」)。その分、変換ロジック(`HealthDataPoint` → `SleepSession`)は小さく保ち、判定ロジックはドメイン層に置く。
+`HealthConnectRepository` のテストは変換規則(記録なし・不正セッションの破棄・例外の変換)に限る。フェイクの `Health` を注入して検証し、プラグインとヘルスコネクトの実際の挙動は実機確認で担保する(`architecture.md`「テスト戦略」)。変換ロジック(`HealthDataPoint` → `SleepSession`)は小さく保ち、判定ロジックはドメイン層に置く。
 
 ### テストの書き方
 

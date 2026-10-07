@@ -130,12 +130,14 @@ test/
 │   │   └── dashboard_screen_test.dart
 │   └── rationale/
 │       └── permission_rationale_screen_test.dart
+├── data/
+│   └── health_connect_repository_test.dart  # フェイクの Health で変換規則を検証
 ├── app_test.dart                     # 起動理由による最初の画面の選択
 └── fakes/
     └── fake_health_repository.dart   # テスト用の HealthRepository 実装(本番コードからは参照しない)
 ```
 
-- `test/data/` は作らない(`HealthConnectRepository` は実機確認で担保する。`architecture.md`「テスト戦略」)
+- `test/data/` は `HealthConnectRepository` の変換規則のテストだけを置く(フェイクの `Health` を注入する。プラグインとヘルスコネクトの実際の挙動は実機確認で担保する。`architecture.md`「テスト戦略」)
 - 統合テスト(`integration_test/`)・E2E は MVP では置かない
 
 ### android/(Android ネイティブ)

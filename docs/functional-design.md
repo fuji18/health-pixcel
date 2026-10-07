@@ -246,11 +246,12 @@ class HealthReadException implements Exception {
 | `checkPermissions` | `hasPermissions([STEPS])` / `hasPermissions([SLEEP_SESSION])`(各 `READ`) | 種別ごとに個別に呼ぶ(片方だけ許可を判別するため)。`null`/`false` は `denied` |
 | `requestPermissions` | `requestAuthorization([STEPS, SLEEP_SESSION], permissions: [READ, READ])` | 戻り値の bool は使わず、直後に `checkPermissions()` を呼んで種別ごとの状態を返す |
 | `openPermissionSettings` | 自作 MethodChannel `health_pixcel/health_connect_settings` の `open` | Kotlin 側の手順は `architecture.md`「ヘルスコネクトの設定画面を開く」 |
-| `openHealthConnectStore` | `installHealthConnect()` | Play ストアのヘルスコネクトのページを開く(更新にも使う)。例外が出たら `false` を返す |
-| `readTotalSteps` | `getTotalStepsInInterval(start, end)` | ヘルスコネクトの集計 API を使うため、複数ソースの重複除外はヘルスコネクト側で行われる。`null` と `0` は記録なしとして `null` を返す |
+| `openHealthConnectStore` | `installHealthConnect()` | Play ストアのヘルスコネクトのページを開く(更新にも使う)。例外が出たら `false` を返す(`health` 13.3.2 はネイティブ側の失敗を握りつぶすため、実際に `false` になるのは Dart 側で例外が出たときだけ) |
+| `readTotalSteps` | `getTotalStepsInInterval(start, end)` | ヘルスコネクトの集計 API を使うため、複数ソースの重複除外はヘルスコネクト側で行われる。`0` は記録なしとして `null` を返す。`null` は `HealthReadException(readFailed)` を投げる(`health` 13.3.2 はネイティブ側の例外を握りつぶして `null` を返し、記録なしの区間では `0` を返すため。#6 でソース確認) |
 | `readSleepSessions` | `getHealthDataFromTypes(types: [SLEEP_SESSION], startTime, endTime)` | 各 `HealthDataPoint` の `dateFrom`/`dateTo` を `toLocal()` して `SleepSession` に変換。`dateTo <= dateFrom` は破棄 |
 
-- `UnsupportedError`(ヘルスコネクト利用不可)→ `HealthReadException(unavailable)`、`HealthException` などその他の例外 → `HealthReadException(readFailed)`
+- `UnsupportedError`(ヘルスコネクト利用不可)→ `HealthReadException(unavailable)`、`HealthException` などその他の例外 → `HealthReadException(readFailed)`。この変換は `checkAvailability` / `checkPermissions` / `requestPermissions` / `readTotalSteps` / `readSleepSessions` のすべてに適用する(上位層に `health` の例外型を漏らさない)
+- `Health` はコンストラクタ引数で差し替えられるようにする(`HealthConnectRepository({Health? health})`)。ユニットテストでフェイクを注入し、上記の変換を検証するため
 - 例外を変換するとき、元の例外メッセージやデータ点をログに出さない
 - `Health().configure()` は `HealthConnectRepository` の内部で 1 回だけ呼ぶ: フィールド `late final Future<void> _configured = _health.configure();` を持ち、各公開メソッドの先頭で `await _configured;` する(`late final` のため初回アクセス時に 1 度だけ実行される)。`main.dart` は `health` を import しない
 
@@ -494,7 +495,7 @@ DateTime nextDay(DateTime day) => DateTime(day.year, day.month, day.day + 1);
 
 1. `range.days` の各日 `d` について `readTotalSteps(d, nextDay(d))` を呼ぶ。ただし今日は終端を `range.now` にする
 2. 7 回の呼び出しは `Future.wait` で並行に実行する
-3. 戻り値が `null` → `DailySteps(steps: null)`(記録なし)
+3. 戻り値が `null` → `DailySteps(steps: null)`(記録なし。リポジトリが `0` を `null` に変換済み。プラグインの `null` = 読み取り失敗はリポジトリが `HealthReadException` にする)
 4. 1 日でも `HealthReadException` が出た場合は、歩数全体を `MetricFailed` にする(部分的な表示はしない。欠けた日を「記録なし」と誤表示しないため)
 
 **0 を記録なしとする理由**: ヘルスコネクトの集計 API は記録が 1 件もない区間で 0 を返す場合があり、「0 歩」と「記録なし」を区別できない。ウォッチを装着していれば 0 歩の日は実質的に起こらないため、0 は記録なしとして表示する。
@@ -650,6 +651,7 @@ MVP では健康データをファイル・データベースに保存しない�
 - `buildDateRange`: 通常日・月またぎ・年またぎ・23:59 で 7 日が 00:00 に揃い、`now` が保持される(夏時間の検証は任意。対象端末の日本には夏時間がないため、`DateTime(y, m, d ± n)` を使う規約で担保する)
 - `assignSleepToDays`: 日付をまたぐ睡眠が起床日に入る / 最古日より前に起床したセッションが除外される / 同日 2 件(昼寝)が昇順に並ぶ / 重複セッションが 1 件になる / セッションがない日が空リストになる
 - A4 のフォーマット関数(`7時間12分` / `45分` / `8,432 歩` / `今日 10/6(火)`。2026-10-06 基準)
+- `HealthConnectRepository`: フェイクの `Health` を注入し、歩数の `0` → `null`・`null` → `readFailed` / `dateTo <= dateFrom` のセッションの破棄と `toLocal()` / `UnsupportedError` → `unavailable`・その他の例外 → `readFailed` / `configure()` が 1 回だけ呼ばれること / 権限が種別ごとに判定されること
 - `WeeklySummaryService`: フェイクの `HealthRepository` と固定時計で、歩数の `null`/`0` → 記録なし、1 日失敗 → `MetricFailed`、今日の終端が `range.now` になること、時計が 1 回しか読まれないこと
 - `DashboardController`: フェイクのリポジトリで、利用不可 / 両方未許可 / 片方未許可 / 許可後の自動再読み込み / 読み取り失敗 / 読み込み中の `unavailable` → `DashboardUnavailable` / `refresh()` 中に前回の値が残る / `_fetch()` の多重呼び出しが 1 回に合流する / 権限ダイアログ中の `onResumed()` が無視される / 権限が変わらない復帰で再読み込みしない
 - `isAllEmpty`: 定義の 3 条件の組み合わせ(片方未許可 + 片方全日記録なし → `true`、片方 `MetricFailed` → `false`)
