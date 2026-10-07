@@ -13,10 +13,17 @@
       "Bash(npm test:*)",
       "Bash(npm run:*)",
       "Bash(npm ci:*)",
-      "Bash(npx tsc:*)",
-      "Bash(npx vitest:*)",
-      "Bash(npx eslint:*)",
       "Bash(npx prettier:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter test:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(flutter --version:*)",
+      "Bash(flutter doctor:*)",
+      "Bash(dart format:*)",
+      "Bash(dart analyze:*)",
+      "Bash(bash scripts/check-layer-imports.sh:*)",
+      "Bash(bash scripts/check-privacy.sh:*)",
+      "Bash(bash scripts/check-release-permissions.sh:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
@@ -54,7 +61,8 @@
       "Bash(git push -f:*)"
     ],
     "ask": [
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(flutter pub add:*)"
     ]
   },
   "hooks": {
@@ -98,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; npx --no-install prettier --write --ignore-unknown \"$f\"; } 2>/dev/null || true"
+            "command": "jq -r '.tool_response.filePath // .tool_input.file_path' | { read -r f; case \"$f\" in *.dart) { command -v dart >/dev/null 2>&1 && dart format \"$f\" || \"$HOME/flutter/bin/dart\" format \"$f\"; } >/dev/null ;; *) npx --no-install prettier --write --ignore-unknown \"$f\" ;; esac; } 2>/dev/null || true"
           },
           {
             "type": "command",

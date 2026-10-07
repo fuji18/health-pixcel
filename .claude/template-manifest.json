@@ -2,8 +2,8 @@
   "$comment": "テンプレート追従の単一ソース。/sync-template と .github/workflows/template-update-check.yml が参照する。owned=上書き / merge=手動統合 / never=触らない。判定の優先順位は owned > merge > never(パスが複数に該当する場合は上位が勝つ)。末尾が / のエントリはディレクトリ配下すべてを指す。syncedAt はテンプレート側の commit SHA(未同期なら null)。",
   "templateRepo": "https://github.com/fuji18/claude-template.git",
   "templateBranch": "main",
-  "syncedAt": null,
-  "syncedDate": null,
+  "syncedAt": "726f15cf502516cc0fea26de7afa1c8d95da7a1b",
+  "syncedDate": "2026-10-06",
   "owned": [
     ".claude/rules/",
     ".claude/commands/",

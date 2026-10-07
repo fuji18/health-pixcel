@@ -1,16 +1,33 @@
 # Temporary files
 tmp/
 
-# Node.js
+# Node.js(ハーネス専用: husky / lint-staged / secretlint / prettier)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
 # Build outputs
-dist/
 build/
-*.tsbuildinfo
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+
+# Android
+android/.gradle/
+android/local.properties
+# Android Studio が出力する署名済み APK の置き場(ソースの android/app/src/* とは別)
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/**/GeneratedPluginRegistrant.java
+*.jks
+*.keystore
+android/key.properties
 
 # Environment variables
 .env

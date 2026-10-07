@@ -1,51 +1,35 @@
 {
-  "name": "claude-code-template",
+  "name": "health-pixcel",
   "version": "0.1.0",
-  "description": "Spec-driven development template for Claude Code",
-  "type": "module",
+  "description": "端末内だけで完結する個人用ヘルスデータ解析アプリ(Flutter / Android)。この package.json はハーネス(husky・lint-staged・secretlint・prettier)専用で、scripts は Flutter の検証コマンドへの入口",
   "private": true,
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "prepare": "husky",
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "lint": "flutter analyze && for s in scripts/check-layer-imports.sh scripts/check-privacy.sh; do [ ! -f \"$s\" ] || bash \"$s\" || exit 1; done",
+    "format": "dart format .",
+    "format:check": "dart format --output=none --set-exit-if-changed .",
+    "test": "flutter test"
   },
   "keywords": [
-    "spec-driven-development",
-    "claude-code",
-    "template"
+    "flutter",
+    "health-connect",
+    "android",
+    "privacy"
   ],
   "license": "MIT",
   "devDependencies": {
-    "@eslint/js": "^10.0.0",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.7",
-    "@types/node": "^26.6.4",
-    "@vitest/coverage-v8": "^5.0.3",
-    "@vitest/ui": "^5.0.0",
-    "eslint": "^10.12.0",
-    "eslint-config-prettier": "^10.1.0",
     "husky": "^9.1.0",
     "lint-staged": "^17.6.0",
     "prettier": "^3.9.9",
-    "secretlint": "^13.0.7",
-    "typescript": "~6.0.0",
-    "typescript-eslint": "^8.71.0",
-    "vitest": "^5.0.0"
+    "secretlint": "^13.0.7"
   },
   "lint-staged": {
-    "*.{ts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
+    "*.dart": [
+      "dart format"
     ],
     "*.{js,mjs,cjs,json,md,yml,yaml}": [
       "prettier --write"

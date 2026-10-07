@@ -1,5 +1,5 @@
 {
-  "name": "template-project",
+  "name": "health-pixcel",
   "image": "mcr.microsoft.com/devcontainers/base:bookworm",
   "features": {
     "ghcr.io/devcontainers/features/node:2": {
@@ -9,6 +9,9 @@
   },
   "containerEnv": {
     "LOCAL_GH_TOKEN": "${localEnv:GH_TOKEN}"
+  },
+  "remoteEnv": {
+    "PATH": "${containerEnv:HOME}/flutter/bin:${containerEnv:PATH}"
   },
   "customizations": {
     "vscode": {

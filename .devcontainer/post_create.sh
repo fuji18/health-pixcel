@@ -4,7 +4,7 @@ set -e
 echo "=== Post-create setup ==="
 
 # Install Playwright deps (only when the project actually uses Playwright)
-echo "[1/4] Installing Playwright dependencies..."
+echo "[1/5] Installing Playwright dependencies..."
 if grep -qE '"(@playwright/test|playwright)"' package.json 2>/dev/null; then
   npx --yes playwright install-deps chromium
 else
@@ -12,7 +12,7 @@ else
 fi
 
 # Install Claude Code
-echo "[2/4] Installing Claude Code..."
+echo "[2/5] Installing Claude Code..."
 npm install -g @anthropic-ai/claude-code
 
 # Install Codex CLI (Codex 併用ハーネスの前提。docs/template-dev/codex-harness.html §12.4)
@@ -24,7 +24,7 @@ npm install -g @anthropic-ai/claude-code
 # npm install は成功扱いで終わり、実行時に初めて
 #   Error: Missing optional dependency @openai/codex-linux-x64
 # で落ちる。インストール成否は npm ではなく codex --version で判定する。
-echo "[3/4] Installing Codex CLI..."
+echo "[3/5] Installing Codex CLI..."
 npm install -g @openai/codex || true
 if ! codex --version &>/dev/null; then
   echo "  ⚠️  プラットフォーム別バイナリの取得に失敗。再試行します..."
@@ -44,7 +44,7 @@ fi
 # GitHub authentication
 # Codespaces が注入する GITHUB_TOKEN を尊重し、ローカル devcontainer では
 # LOCAL_GH_TOKEN(ホストの GH_TOKEN)をフォールバックとして使う
-echo "[4/4] Setting up GitHub authentication..."
+echo "[4/5] Setting up GitHub authentication..."
 GITHUB_TOKEN="${GITHUB_TOKEN:-${LOCAL_GH_TOKEN:-}}"
 if gh auth status &>/dev/null; then
   echo "  Already authenticated with GitHub."
@@ -54,6 +54,25 @@ elif [ -n "$GITHUB_TOKEN" ]; then
   echo "  GitHub authentication complete (via GITHUB_TOKEN)."
 else
   echo "  ⚠️  Not authenticated. Run 'gh auth login' to authenticate manually."
+fi
+
+# Install Flutter SDK(analyze / format / test 用。実機実行とリリースビルドは Windows 側で行う)
+# バージョンは docs/architecture.md「言語・ランタイム」と CI(ci.yml)に揃える。
+# Android SDK は入れないため、flutter doctor の Android toolchain 警告は想定どおり。
+FLUTTER_VERSION="3.47.6"
+FLUTTER_HOME="$HOME/flutter"
+echo "[5/5] Installing Flutter SDK ${FLUTTER_VERSION}..."
+if [ -x "$FLUTTER_HOME/bin/flutter" ] && "$FLUTTER_HOME/bin/flutter" --version 2>/dev/null | grep -q "Flutter ${FLUTTER_VERSION} "; then
+  echo "  Flutter ${FLUTTER_VERSION} already installed."
+else
+  rm -rf "$FLUTTER_HOME"
+  git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$FLUTTER_HOME"
+fi
+"$FLUTTER_HOME/bin/flutter" config --no-analytics --no-cli-animations >/dev/null
+"$FLUTTER_HOME/bin/dart" --disable-analytics >/dev/null 2>&1 || true
+"$FLUTTER_HOME/bin/flutter" --version
+if [ -f pubspec.yaml ]; then
+  "$FLUTTER_HOME/bin/flutter" pub get
 fi
 
 echo "=== Setup complete ==="

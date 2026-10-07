@@ -1,26 +1,42 @@
-# テンプレートの鮮度維持: 依存関係・Actions・devcontainer を週次でチェックする
+# プロダクト向けプロファイル(/kickoff フェーズ4。元: docs/template-dev/dependabot-product.example.yml)
+#   - 通常の依存更新は monthly(週次 PR のトリアージがレビュー・CI コストになるため)
+#   - minor / patch はグループ化して 1 PR に、major はグループ外 = 個別 PR(破壊的変更は人がレビューする)
+#   - セキュリティ更新は interval と無関係に即時 PR が出る(別系統)ので、monthly でも遅れない
 version: 2
 updates:
+  # アプリ本体(Flutter)。pubspec.yaml は最初の実装チケットで生成される
+  # 依存の追加・更新時はネットワーク通信・解析 SDK を含まないことを確認する(CLAUDE.md「プロジェクト固有ルール」)
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      pub-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  # ハーネス専用(husky / lint-staged / secretlint / prettier)
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-    # devDependencies は 1 PR にまとめてレビューコストを下げる
+      interval: monthly
     groups:
-      dev-dependencies:
-        dependency-type: development
-    ignore:
-      # typescript-eslint の peer 制約(TS 6 系まで)を超える major 更新は
-      # ツールチェーン側が追随するまで受け付けない(npm ci が ERESOLVE で失敗する)
-      - dependency-name: typescript
-        update-types: ['version-update:semver-major']
+      harness-minor-patch:
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - '*'
 
   - package-ecosystem: devcontainers
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly

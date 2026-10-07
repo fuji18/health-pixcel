@@ -11,7 +11,14 @@ CLAUDE.md
 node_modules/
 
 # ビルド成果物
-dist/
+build/
+
+# Flutter / Android(Dart は dart format、Gradle は対象外)
+lib/
+test/
+android/
+.dart_tool/
+pubspec.lock
 
 # Codex 併用ハーネス
 # Prettier は .gitignore を参照しないため、gitignore 済みでも run record の
