@@ -22,9 +22,10 @@
 
 ## 申し送り
 
-- 実装完了: 2026-10-07。fork 2 往復(初回 + 検収指摘の対応)。検収は code-reviewer 1 巡(critical 0 / major 0 / minor 5)。minor 2 件(項目ラベルの `Semantics(header: true)`、戻る矢印テストの偽陰性)を採用。test-runner は全パス(129 件)
+- 実装完了: 2026-10-07。fork 3 往復(初回 + 検収指摘の対応 + CI のリリースビルド失敗の修正)。検収は code-reviewer 1 巡(critical 0 / major 0 / minor 5)。minor 2 件(項目ラベルの `Semantics(header: true)`、戻る矢印テストの偽陰性)を採用。test-runner は全パス(129 件)
 - 計画との差分: `platform_channels.dart` の名前付き引数 → private フィールドで `prefer_initializing_formals` が出るため `// ignore:` を 2 箇所。KDoc の `resolveActivity` の語が §9 の grep に掛かるため言い換え。見出しのテストは本文とノードが結合するため `matchesSemantics` ではなく `isSemantics(isHeader: true)`(`containsSemantics` は非推奨)
 - Kotlin はローカルでコンパイルできない。CI のリリースビルドが緑になるまで完了扱いにしない(CLAUDE.md)
+- CI 失敗: `HealthConnectManager.ACTION_HEALTH_HOME_SETTINGS` は SDK 上で非公開でコンパイル不可(docs/architecture.md の「直接参照してよい」が誤り。docs を修正し文字列定数で持つ形にした)。code-reviewer も公開定数と判断しており、ローカルでコンパイルできない Kotlin の API 可否はレビューでは担保できない
 - 学んだこと: 検査用 grep の語(`resolveActivity`)を設計のコメント例に含めると自分で検査に掛かる。禁止語の検査は設計段階でコメント文と突き合わせる
 - **#10 への申し送り**: (1) 起動理由の判定中に出る空 `Scaffold` がスプラッシュとの間でちらつかないか実機で見る (2) ヘルスコネクトの「利用目的」から開く → 「閉じる」でヘルスコネクトに戻る (3) アプリ起動済みの状態で「利用目的」を開くとダッシュボードが出る(`onNewIntent` 非対応。MVP の仕様) (4) 「ヘルスコネクトの設定を開く」でこのアプリの権限画面が直接開く
 - 見送った指摘: `onNewIntent`(スコープ外)/ チャネルの全例外捕捉(設計どおり)/ 空 Scaffold のちらつき(#10 の実機で確認)
