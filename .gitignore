@@ -16,6 +16,10 @@ build/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
+*.iml
+migrate_working_dir/
+app.*.symbols
+app.*.map.json
 
 # Android
 android/.gradle/

@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- 依存パッケージ経由で混入した INTERNET 権限もマージ時に除去する(PRD 最重要要件) -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>
+</manifest>
