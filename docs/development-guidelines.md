@@ -94,6 +94,9 @@ if (result is MetricLoaded) { ... } else { return const SizedBox(); }
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  exclude:                         # Flutter ツールが pub get 時に自動で追記する(Dart コードは無い)
+    - build/**
+    - android/**
   language:
     strict-casts: true
     strict-inference: true

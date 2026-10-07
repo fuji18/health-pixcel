@@ -1,0 +1,19 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    - avoid_print # 健康データのログ出力防止(flutter_lints に含まれるが明示する)
+    - always_use_package_imports # レイヤー検査を grep で行うため相対 import を禁止
+    - prefer_final_locals
+    - prefer_const_constructors
+    - unawaited_futures # Future の握りつぶし防止
+    - avoid_dynamic_calls
