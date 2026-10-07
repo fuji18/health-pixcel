@@ -162,7 +162,7 @@
 |------|------------------------------------|
 | UI フレームワーク | Flutter(Android のみ) |
 | コンポーネントライブラリ | Material 3(Flutter 標準。追加パッケージは入れない — 依存を増やさないプライバシー要件と一致) |
-| デザイントークンの実装形式 | `ThemeData`(`ColorScheme.fromSeed` + `TextTheme`)を `lib/presentation/app.dart` に集約する。ウィジェット内で色・文字サイズを直書きせず、`Theme.of(context).colorScheme` / `textTheme` 経由で使う |
+| デザイントークンの実装形式 | `ThemeData`(`ColorScheme.fromSeed` + `TextTheme`)を `lib/app.dart` に集約する。ウィジェット内で色・文字サイズを直書きせず、`Theme.of(context).colorScheme` / `textTheme` 経由で使う |
 | アイコン | Material Icons(標準同梱) |
 | 参照デザイン(トーン) | 実用系(§1)。落ち着いた単色シード(青緑系)、ライト/ダーク両対応、数字が主役の一覧。装飾は最小限 |
 
