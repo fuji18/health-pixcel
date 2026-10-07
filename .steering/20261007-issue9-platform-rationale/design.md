@@ -364,3 +364,11 @@ grep -nE 'resolveActivity|queryIntentActivities' android/app/src/main/kotlin -r;
 - `onNewIntent` 非対応: Issue のスコープ外
 - 判定中の空 `Scaffold` のちらつき: #10 の実機確認で見る
 - チャネルの全例外捕捉: 設計どおり
+
+## 11. CI のリリースビルド失敗の対応(司令塔が決定済み)
+
+CI で `MainActivity.kt:50:59 Unresolved reference 'ACTION_HEALTH_HOME_SETTINGS'`。`HealthConnectManager.ACTION_HEALTH_HOME_SETTINGS` は SDK 上で非公開のため参照できない(`ACTION_MANAGE_HEALTH_PERMISSIONS` は公開で解決済み)。
+
+- `MainActivity.kt` の `companion object` に `const val ACTION_HEALTH_HOME_SETTINGS = "android.health.connect.action.HEALTH_HOME_SETTINGS"` を足す(`ACTION_SHOW_PERMISSIONS_RATIONALE` の直後。値は androidx が API 34 以降で使う action と同じ)
+- 50 行目の `Intent(HealthConnectManager.ACTION_HEALTH_HOME_SETTINGS)` を `Intent(ACTION_HEALTH_HOME_SETTINGS)` に変える
+- それ以外は変えない。完了条件は §9(Kotlin のコンパイルは引き続き CI)

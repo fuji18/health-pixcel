@@ -146,10 +146,10 @@ domain       → (なし。dart:core と intl のみ)
 - チャネル名: `health_pixcel/health_connect_settings`、メソッド: `open`
 - Android 側の処理(Kotlin):
   1. `Intent(HealthConnectManager.ACTION_MANAGE_HEALTH_PERMISSIONS)`(`"android.health.connect.action.MANAGE_HEALTH_PERMISSIONS"`)に `Intent.EXTRA_PACKAGE_NAME = packageName` を付けて `startActivity` する(このアプリの権限画面が直接開く)
-  2. 1 が `ActivityNotFoundException`(または `SecurityException`)を投げたら、`Intent(HealthConnectManager.ACTION_HEALTH_HOME_SETTINGS)`(`"android.health.connect.action.HEALTH_HOME_SETTINGS"`)を `startActivity` する(ヘルスコネクトのホーム)
+  2. 1 が `ActivityNotFoundException`(または `SecurityException`)を投げたら、`Intent("android.health.connect.action.HEALTH_HOME_SETTINGS")`を `startActivity` する(ヘルスコネクトのホーム)
   3. 2 も例外を投げたら `false` を返す。成功したら `true` を返す。Dart 側は `false` のとき「ヘルスコネクトを開けませんでした」と表示する
 - **事前に `resolveActivity` / `queryIntentActivities` で解決可能か確認しない**。Android 11 以降のパッケージ可視性の制限により、`<queries>` に宣言していない Intent は解決結果が常に空になるため。`startActivity` を直接呼んで例外で判定する(`startActivity` 自体は可視性の制限を受けない)
-- `HealthConnectManager` の定数は API 34 で追加されたもので、minSdk 34 のため直接参照してよい
+- `HealthConnectManager.ACTION_MANAGE_HEALTH_PERMISSIONS` は API 34 の公開定数で、minSdk 34 のため直接参照してよい。`ACTION_HEALTH_HOME_SETTINGS` は SDK 上で非公開(コンパイル不可。#9 の CI で判明)のため、`MainActivity` の `companion object` に文字列定数として持つ
 - 追加の依存パッケージ(`android_intent_plus` 等)は使わない。依存を増やさないため
 
 ### AndroidManifest の構成

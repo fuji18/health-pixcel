@@ -15,6 +15,11 @@
 - [x] 戻る矢印・見出しのテストを直す(design §10.2)
 - [x] 完了条件の 6 コマンドを通す(design §9)
 
+## CI 失敗の対応(design §11)
+
+- [x] `ACTION_HEALTH_HOME_SETTINGS` を文字列定数にする(design §11)
+- [x] 完了条件の 6 コマンドを通す(design §9)
+
 ## 申し送り
 
 - 実装完了: 2026-10-07。fork 2 往復(初回 + 検収指摘の対応)。検収は code-reviewer 1 巡(critical 0 / major 0 / minor 5)。minor 2 件(項目ラベルの `Semantics(header: true)`、戻る矢印テストの偽陰性)を採用。test-runner は全パス(129 件)

@@ -47,7 +47,7 @@ class MainActivity : FlutterFragmentActivity() {
         tryStartActivity(
             Intent(HealthConnectManager.ACTION_MANAGE_HEALTH_PERMISSIONS)
                 .putExtra(Intent.EXTRA_PACKAGE_NAME, packageName),
-        ) || tryStartActivity(Intent(HealthConnectManager.ACTION_HEALTH_HOME_SETTINGS))
+        ) || tryStartActivity(Intent(ACTION_HEALTH_HOME_SETTINGS))
 
     /** 開けたら true。ActivityNotFoundException / SecurityException は false。 */
     private fun tryStartActivity(intent: Intent): Boolean =
@@ -65,6 +65,7 @@ class MainActivity : FlutterFragmentActivity() {
         const val LAUNCH_CHANNEL = "health_pixcel/launch"
         const val ACTION_SHOW_PERMISSIONS_RATIONALE =
             "androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"
+        const val ACTION_HEALTH_HOME_SETTINGS = "android.health.connect.action.HEALTH_HOME_SETTINGS"
         const val LAUNCH_NORMAL = "normal"
         const val LAUNCH_PERMISSION_RATIONALE = "permissionRationale"
     }
