@@ -140,7 +140,7 @@ enum HealthErrorKind { unavailable, readFailed }
 
 ### エンティティ: DashboardState(画面状態)
 
-読み込み中は `DashboardState` のサブクラスではなく、Riverpod の `AsyncLoading`(値なし)で表す(「DashboardController」参照)。
+読み込み中は `DashboardState` のサブクラスではなく、Riverpod の `AsyncLoading` で表す(「DashboardController」参照)。`requestPermissions()` 中の `AsyncLoading` は Riverpod 3 の仕様で前回の値を引き継ぐ(`state = AsyncLoading()` が自動で `copyWithPrevious` される)ため、画面は `hasValue` ではなく `isLoading` で判定する(`when()` の既定 `skipLoadingOnReload: false` で足りる。#7 で確認)。
 
 ```dart
 sealed class DashboardState {}
@@ -301,8 +301,8 @@ class DashboardController extends AsyncNotifier<DashboardState> {
 
   Future<void> refresh();              // 引っぱって更新・「再読み込み」操作
   Future<void> requestPermissions();   // 「権限を許可する」操作
-  Future<void> openSettings();         // 「ヘルスコネクトの設定を開く」操作
-  Future<void> openStore();            // 「ヘルスコネクトを更新する」操作
+  Future<bool> openSettings();         // 「ヘルスコネクトの設定を開く」操作。開けなかったら false
+  Future<bool> openStore();            // 「ヘルスコネクトを更新する」操作。開けなかったら false
   Future<void> onResumed();            // フォアグラウンド復帰時
 
   // private
@@ -329,8 +329,8 @@ typedef _Snapshot = ({
 | `refresh()` | **前回の値を表示したまま** `_fetch()` を実行し、完了したら `AsyncData(新しい値)` に置き換える(全画面のローディングには戻さない)。引っぱって更新の `RefreshIndicator` はこの Future の完了を待つ |
 | `requestPermissions()` | `_requestingPermission = true` → `repository.requestPermissions()` を `try` / `finally` で囲み、`finally` で必ず `false` に戻す → `AsyncLoading`(値なし)→ `AsyncData(_fetch(force: true) の結果)`。`repository.requestPermissions()` が例外を投げても画面状態はエラーにせず、そのまま `_fetch(force: true)` に進む(権限状態を読み直して表示する) |
 | `onResumed()` | `_requestingPermission` が `true` なら何もしない(権限ダイアログから戻った時の復帰は `requestPermissions()` 側で処理するため)。それ以外は現在の利用可否を `checkAvailability()` で取り、`available` のときだけ `checkPermissions()` も呼んで `_Snapshot` を作る。`_lastSnapshot` と異なれば(`_lastSnapshot` が `null` の場合も含む)`refresh()` を呼ぶ。確認中に例外が出たら `refresh()` を呼ぶ |
-| `openSettings()` | `repository.openPermissionSettings()` が `false` を返したら、`ScaffoldMessenger` で「ヘルスコネクトを開けませんでした」を表示する(状態は変えない)。戻ってきたときの反映は `onResumed()` に任せる |
-| `openStore()` | `repository.openHealthConnectStore()` が `false` を返したら、スナックバー「Play ストアを開けませんでした」を表示する(状態は変えない)。戻ってきたときの反映は `onResumed()` に任せる |
+| `openSettings()` | `repository.openPermissionSettings()` の結果を返す(例外は `false`。状態は変えない)。`false` なら**画面が** `ScaffoldMessenger` で「ヘルスコネクトを開けませんでした」を表示する(コントローラーは `BuildContext` を持たないため。#7 で変更)。戻ってきたときの反映は `onResumed()` に任せる |
+| `openStore()` | `repository.openHealthConnectStore()` の結果を返す(例外は `false`。状態は変えない)。`false` なら画面がスナックバー「Play ストアを開けませんでした」を表示する。戻ってきたときの反映は `onResumed()` に任せる |
 
 **`_fetch({force})` の多重実行の扱い**:
 - `force == false` で `_inFlight` が実行中 → その Future を返す(合流する。引っぱって更新の連打や復帰の重なり向け)
@@ -464,7 +464,7 @@ stateDiagram-v2
     Unavailable --> NeedsPermission: 更新して復帰(権限未許可)
 ```
 
-- `Loading` は `AsyncLoading`(値なし)。それ以外は `AsyncData` の中身の `DashboardState`
+- `Loading` は `AsyncLoading`(`isLoading`。権限リクエスト後は前回の値を伴う)。それ以外は `AsyncData` の中身の `DashboardState`
 - 復帰時・引っぱって更新では `Loading` を経由しない(`refresh()`)
 - 引っぱって更新(`RefreshIndicator`)は `Ready` / `NeedsPermission` / `Unavailable` のすべてで有効にする。案内表示だけの画面でも引っぱれるよう、本文を `ListView`(`AlwaysScrollableScrollPhysics`)に入れる
 - `Ready` の中の表示は `MetricResult` の組み合わせで決まる(「UI設計」参照)
@@ -592,7 +592,7 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 
 | 状態 | 表示 | 操作 |
 |---|---|---|
-| `AsyncLoading`(値なし) | ローディングインジケーター | なし |
+| `AsyncLoading`(`isLoading`。権限リクエスト後は前回の値を伴う) | ローディングインジケーター | なし |
 | `DashboardUnavailable(notInstalled)` | 「ヘルスコネクトを利用できません」+「Play ストアでヘルスコネクトの状態を確認してください」 | 「Play ストアを開く」(`openStore()`) |
 | `DashboardUnavailable(updateRequired)` | 「ヘルスコネクトの更新が必要です」 | 「ヘルスコネクトを更新する」(`openStore()`) |
 | `DashboardNeedsPermission` | 「歩数と睡眠を表示するには、ヘルスコネクトの読み取り権限が必要です。データの読み取りのみ行い、端末の外には送信しません」 | 「権限を許可する」/「ヘルスコネクトの設定を開く」/「詳しく見る」(`PermissionRationaleScreen` へ) |
