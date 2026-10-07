@@ -71,7 +71,7 @@ void main() {
     );
     await tester.tap(find.text('開く'));
     await tester.pumpAndSettle();
-    expect(find.byType(BackButton), findsNothing);
+    expect(find.byType(BackButton), findsOneWidget);
     await tester.tap(find.text('閉じる'));
     await tester.pumpAndSettle();
 
@@ -84,6 +84,7 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(home: PermissionRationaleScreen(closesApp: true)),
     );
+    expect(find.byType(BackButton), findsNothing);
     await tester.tap(find.text('閉じる'));
     await tester.pumpAndSettle();
 

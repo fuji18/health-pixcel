@@ -28,10 +28,7 @@ class PermissionRationaleScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('健康データの利用について'),
-        automaticallyImplyLeading: false,
-      ),
+      appBar: AppBar(title: const Text('健康データの利用について')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

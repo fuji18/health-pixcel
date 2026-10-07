@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health_pixcel/app.dart';
-import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_screen.dart';
 import 'package:health_pixcel/presentation/providers.dart';
 import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
@@ -21,11 +18,11 @@ void main() {
         overrides: [
           healthRepositoryProvider.overrideWithValue(FakeHealthRepository()),
           clockProvider.overrideWithValue(() => DateTime(2026, 10, 6, 10, 30)),
-          launchActionProvider.overrideWith((ref) async => LaunchAction.normal),
         ],
         child: const HealthPixcelApp(),
       ),
     );
+    expect(find.byType(DashboardScreen), findsOneWidget);
     await tester.pumpAndSettle();
 
     expect(find.byType(DashboardScreen), findsOneWidget);
@@ -36,20 +33,23 @@ void main() {
     expect(app.darkTheme!.colorScheme.brightness, Brightness.dark);
   });
 
-  testWidgets('起動理由が permissionRationale なら利用目的画面が最初に出る', (tester) async {
+  testWidgets('起動ルートが /permission-rationale なら利用目的画面が最初に出る', (tester) async {
+    tester.binding.platformDispatcher.defaultRouteNameTestValue =
+        '/permission-rationale';
+    addTearDown(
+      tester.binding.platformDispatcher.clearDefaultRouteNameTestValue,
+    );
     final fake = FakeHealthRepository();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           healthRepositoryProvider.overrideWithValue(fake),
           clockProvider.overrideWithValue(() => DateTime(2026, 10, 6, 10, 30)),
-          launchActionProvider.overrideWith(
-            (ref) async => LaunchAction.permissionRationale,
-          ),
         ],
         child: const HealthPixcelApp(),
       ),
     );
+    expect(find.byType(PermissionRationaleScreen), findsOneWidget);
     await tester.pumpAndSettle();
 
     expect(find.byType(PermissionRationaleScreen), findsOneWidget);
@@ -63,27 +63,28 @@ void main() {
       isTrue,
     );
     expect(fake.checkAvailabilityCalls, 0);
+    expect(find.byType(BackButton), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('起動理由の判定中は空の画面を出す', (tester) async {
-    final completer = Completer<LaunchAction>();
+  testWidgets('未知の起動ルートならダッシュボードが出る', (tester) async {
+    tester.binding.platformDispatcher.defaultRouteNameTestValue = '/unknown';
+    addTearDown(
+      tester.binding.platformDispatcher.clearDefaultRouteNameTestValue,
+    );
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           healthRepositoryProvider.overrideWithValue(FakeHealthRepository()),
           clockProvider.overrideWithValue(() => DateTime(2026, 10, 6, 10, 30)),
-          launchActionProvider.overrideWith((ref) => completer.future),
         ],
         child: const HealthPixcelApp(),
       ),
     );
-    await tester.pump();
-
-    expect(find.byType(Scaffold), findsOneWidget);
-    expect(find.byType(DashboardScreen), findsNothing);
-    expect(find.byType(PermissionRationaleScreen), findsNothing);
-
-    completer.complete(LaunchAction.normal);
     await tester.pumpAndSettle();
+
+    expect(find.byType(DashboardScreen), findsOneWidget);
+    expect(find.byType(PermissionRationaleScreen), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
