@@ -22,16 +22,22 @@ class HealthPixcelApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final Widget home = switch (ref.watch(launchActionProvider)) {
-      AsyncLoading() => const Scaffold(),
-      AsyncData(value: LaunchAction.permissionRationale) =>
-        const PermissionRationaleScreen(closesApp: true),
-      _ => const DashboardScreen(),
+      LaunchAction.permissionRationale => const PermissionRationaleScreen(
+        closesApp: true,
+      ),
+      LaunchAction.normal => const DashboardScreen(),
     };
     return MaterialApp(
       title: 'health-pixcel',
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
-      home: home,
+      // 起動時のルート名は launchActionProvider で解釈済み。ここでは最初の 1 枚だけを積む。
+      onGenerateInitialRoutes: (_) => [
+        MaterialPageRoute<void>(builder: (_) => home),
+      ],
+      // 名前付きルートは使わない(MaterialApp の assert を満たすためだけに渡す)。
+      onGenerateRoute: (_) =>
+          MaterialPageRoute<void>(builder: (_) => const DashboardScreen()),
     );
   }
 }

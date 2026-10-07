@@ -372,3 +372,124 @@ CI で `MainActivity.kt:50:59 Unresolved reference 'ACTION_HEALTH_HOME_SETTINGS'
 - `MainActivity.kt` の `companion object` に `const val ACTION_HEALTH_HOME_SETTINGS = "android.health.connect.action.HEALTH_HOME_SETTINGS"` を足す(`ACTION_SHOW_PERMISSIONS_RATIONALE` の直後。値は androidx が API 34 以降で使う action と同じ)
 - 50 行目の `Intent(HealthConnectManager.ACTION_HEALTH_HOME_SETTINGS)` を `Intent(ACTION_HEALTH_HOME_SETTINGS)` に変える
 - それ以外は変えない。完了条件は §9(Kotlin のコンパイルは引き続き CI)
+
+## 12. `/code-review` 指摘の対応(司令塔が決定済み)
+
+指摘 6 件をすべて直す。起動理由の受け渡しを **MethodChannel(非同期)から Flutter の初期ルート(同期)に替える**。これで (1) コールドスタートのたびに空の Scaffold が出る問題、(2) 1 つの値のためにチャネル・FutureProvider・ローディング分岐を持つ過剰な構造、(4) `launchActionProvider` がチャネルを直接作っていて差し替えられない問題、(5) チャネルクラスのコピー重複、がまとめて解消する。(3) は docs の訂正で司令塔が対応済み、(6) は戻る矢印を出す。
+
+§0 の「起動理由の取得タイミング」「判定中の画面」「判定がエラー」「利用目的画面の見出し(`automaticallyImplyLeading: false`)」は本節で置き換える。§8.5 のテスト 2 つも本節で置き換える。
+
+### 12.1 仕組み(根拠)
+
+- `FlutterFragmentActivity.getInitialRoute()`(Java では `protected String`、注釈なし)は `onCreate` の中の `createFlutterFragment()` で呼ばれ、新しく作られたエンジンの初期ルートになる。Dart 側では `WidgetsBinding.instance.platformDispatcher.defaultRouteName` で**最初のフレームの前に同期的に**読める
+- `WidgetsApp` は `defaultRouteName` が `/` でないとき `initialRoute` より優先し、`home` だけだと `/permission-rationale` を route table で解決しようとして失敗する(`flutter/lib/src/widgets/app.dart` の `_initialRouteName`)。そのため `home` は使わず **`onGenerateInitialRoutes`** で最初の画面を 1 枚だけ返す。`home` と `onGenerateInitialRoutes` は併用できない(assert)。また `home` / `routes` / `onGenerateRoute` / `onUnknownRoute` のどれかが必須(assert)なので、`onGenerateRoute` も渡す
+- ルート名は `/permission-rationale`(Kotlin と Dart で同じ文字列。Dart 側は `permissionRationaleRoute` 定数)
+
+### 12.2 `MainActivity.kt`
+
+- フィールド `launchAction`、`onCreate` のオーバーライド、`health_pixcel/launch` チャネルのハンドラ、定数 `LAUNCH_CHANNEL` / `LAUNCH_NORMAL` / `LAUNCH_PERMISSION_RATIONALE` を削除する。`import android.os.Bundle` も削除する
+- 次のメソッドを追加する(`configureFlutterEngine` の直前):
+
+```kotlin
+    /**
+     * 利用目的のインテントで起動されたら利用目的画面のルートを返す。
+     * Dart に届くのは新しいエンジンを作るとき(この Activity インスタンスの生成時)だけ。onNewIntent は扱わない。
+     */
+    override fun getInitialRoute(): String? =
+        when (intent?.action) {
+            ACTION_SHOW_PERMISSIONS_RATIONALE,
+            Intent.ACTION_VIEW_PERMISSION_USAGE -> ROUTE_PERMISSION_RATIONALE
+            else -> super.getInitialRoute()
+        }
+```
+
+- `companion object` に `const val ROUTE_PERMISSION_RATIONALE = "/permission-rationale"` を足す(`ACTION_HEALTH_HOME_SETTINGS` の直後)
+- `SETTINGS_CHANNEL` のハンドラ・`openHealthConnectSettings` / `tryStartActivity` は変えない
+
+### 12.3 `lib/data/platform_channels.dart`
+
+- `LaunchChannel` クラスを削除する(`HealthConnectSettingsChannel` だけが残る)。`health_status.dart` の import が不要になれば消す
+- ファイル先頭のコメントなど、他は変えない
+
+### 12.4 `lib/presentation/providers.dart`
+
+- `platform_channels.dart` の import は `LaunchChannel` 用だけなら削除する(`HealthConnectRepository` は `health_connect_repository.dart` から来る)
+- `import 'package:flutter/widgets.dart';` を足す
+- `launchActionProvider` を次で置き換える:
+
+```dart
+/// 利用目的画面の起動ルート(MainActivity.getInitialRoute と同じ値)。
+const permissionRationaleRoute = '/permission-rationale';
+
+/// 起動理由。起動時のルート名(Android の初期ルート)から同期的に決まる。
+final launchActionProvider = Provider<LaunchAction>(
+  (ref) =>
+      WidgetsBinding.instance.platformDispatcher.defaultRouteName ==
+          permissionRationaleRoute
+      ? LaunchAction.permissionRationale
+      : LaunchAction.normal,
+);
+```
+
+  (`PlatformDispatcher.instance` ではなく `WidgetsBinding.instance.platformDispatcher` を使う。テストの `TestPlatformDispatcher` で値を差し替えるため)
+
+### 12.5 `lib/app.dart`
+
+```dart
+/// アプリのルート。起動理由(launchActionProvider)で最初の画面を決める。
+class HealthPixcelApp extends ConsumerWidget {
+  const HealthPixcelApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final Widget home = switch (ref.watch(launchActionProvider)) {
+      LaunchAction.permissionRationale => const PermissionRationaleScreen(
+        closesApp: true,
+      ),
+      LaunchAction.normal => const DashboardScreen(),
+    };
+    return MaterialApp(
+      title: 'health-pixcel',
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      // 起動時のルート名は launchActionProvider で解釈済み。ここでは最初の 1 枚だけを積む。
+      onGenerateInitialRoutes: (_) => [
+        MaterialPageRoute<void>(builder: (_) => home),
+      ],
+      // 名前付きルートは使わない(MaterialApp の assert を満たすためだけに渡す)。
+      onGenerateRoute: (_) =>
+          MaterialPageRoute<void>(builder: (_) => const DashboardScreen()),
+    );
+  }
+}
+```
+
+(整形は `dart format` に従う。`switch` は網羅的なので `_` を書かない)
+
+### 12.6 `lib/presentation/rationale/permission_rationale_screen.dart`
+
+- `AppBar` の `automaticallyImplyLeading: false,` の行を削除する(既定の `true` に戻す)。ダッシュボードから push されたときは戻る矢印が出て、最初の画面(`closesApp: true`)のときは戻り先が無いので出ない
+- 他は変えない
+
+### 12.7 テスト
+
+**`test/data/platform_channels_test.dart`**: `group('LaunchChannel', ...)` を丸ごと削除し、未使用になった変数(`launch` 等)も消す。`HealthConnectSettingsChannel` のテストはそのまま。
+
+**`test/app_test.dart`**: 3 つのテストを次の形にする。`dart:async` の import が不要になれば消す。
+
+1. `'HealthPixcelApp がダッシュボードとテーマを表示する'`: `launchActionProvider` の override を削除する(テストの既定ルートは `/` = `normal`)。`pumpWidget` の**直後、`pumpAndSettle` の前**に `expect(find.byType(DashboardScreen), findsOneWidget);` を足す(最初のフレームからダッシュボードが出る = 空画面を挟まない、の確認)。他のアサーションはそのまま
+2. `'起動ルートが /permission-rationale なら利用目的画面が最初に出る'`(旧「起動理由が permissionRationale なら…」を置き換え): `pumpWidget` の前に `tester.binding.platformDispatcher.defaultRouteNameTestValue = '/permission-rationale';` と `addTearDown(tester.binding.platformDispatcher.clearDefaultRouteNameTestValue);`。`launchActionProvider` は override しない。`pumpWidget` 直後に `PermissionRationaleScreen` が `findsOneWidget`。`pumpAndSettle` の後に、既存のアサーション(`DashboardScreen` が `findsNothing`、`closesApp` が `true`、`fake.checkAvailabilityCalls` が `0`)に加えて `expect(find.byType(BackButton), findsNothing);` と `expect(tester.takeException(), isNull);`
+3. `'未知の起動ルートならダッシュボードが出る'`(旧「起動理由の判定中は空の画面を出す」を置き換え): `defaultRouteNameTestValue = '/unknown'`(tearDown は 2 と同じ)→ `pumpAndSettle` → `DashboardScreen` が `findsOneWidget`、`PermissionRationaleScreen` が `findsNothing`、`expect(tester.takeException(), isNull);`
+
+**`test/presentation/rationale/permission_rationale_screen_test.dart`**:
+
+- `'閉じるで前の画面に戻る'`: `expect(find.byType(BackButton), findsNothing);` を `findsOneWidget` に変える
+- `'closesApp なら閉じるでアプリを閉じる'`: `pumpWidget` の直後に `expect(find.byType(BackButton), findsNothing);` を足す
+
+### 12.8 完了条件
+
+§9 の 6 コマンドに加えて次も成功すること(起動理由のチャネルが残っていない確認):
+
+```bash
+grep -rnE 'health_pixcel/launch|LaunchChannel|getLaunchAction' lib test android/app/src/main/kotlin; test $? -eq 1
+```
