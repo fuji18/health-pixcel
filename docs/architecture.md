@@ -85,7 +85,7 @@ domain       → (なし。dart:core と intl のみ)
 
 #### プレゼンテーション層
 - **責務**: `DashboardState` の表示、ユーザー操作の受付、アプリのライフサイクル(復帰)の検知
-- **許可される操作**: `DashboardController` 経由でアプリケーション層・`HealthRepository`(抽象)を呼ぶ。`lib/presentation/providers.dart` に限り、依存の組み立て(DI の合成)のために `HealthConnectRepository` と `LaunchChannel`(`lib/data/platform_channels.dart`)を参照してよい
+- **許可される操作**: `DashboardController` 経由でアプリケーション層・`HealthRepository`(抽象)を呼ぶ。`lib/presentation/providers.dart` に限り、依存の組み立て(DI の合成)のために `HealthConnectRepository` を参照してよい
 - **禁止される操作**: `health` パッケージの直接 import(`main.dart` を含む。`Health().configure()` は `HealthConnectRepository` の内部で呼ぶ)、日付範囲や睡眠の帰属の計算
 
 #### アプリケーション層
@@ -113,7 +113,7 @@ domain       → (なし。dart:core と intl のみ)
 | `healthRepositoryProvider` | `Provider<HealthRepository>` | 既定は `HealthConnectRepository`。テストでフェイクに差し替える |
 | `weeklySummaryServiceProvider` | `Provider<WeeklySummaryService>` | 上記 2 つから生成 |
 | `dashboardControllerProvider` | `AsyncNotifierProvider<DashboardController, DashboardState>` | 画面状態。`build()` で初回の読み込み(`_fetch()`)を行う |
-| `launchActionProvider` | `FutureProvider<LaunchAction>` | 起動理由。`LaunchChannel.getLaunchAction()` を呼ぶ。`app.dart` が最初の画面を決めるために使う |
+| `launchActionProvider` | `Provider<LaunchAction>` | 起動理由。起動時のルート名(`WidgetsBinding.instance.platformDispatcher.defaultRouteName`)が `/permission-rationale` なら `permissionRationale`。`app.dart` が最初の画面を決めるために使う |
 
 - `DashboardController` は `AsyncNotifier<DashboardState>` として実装する。状態遷移の規則(どの操作で `AsyncLoading` に戻すか、`refresh()` で前回値を保つこと、多重実行の抑止)は機能設計書「DashboardController」が正。`AsyncError` は発生させない(例外は `_fetch()` 内で捕捉して `MetricFailed` に変換する)
 - `refresh()` は `state` を `AsyncLoading` にせず、`_fetch()` の完了後に `state = AsyncData(...)` で置き換える(全画面のローディングに戻さないため)
@@ -129,15 +129,14 @@ domain       → (なし。dart:core と intl のみ)
 ### MainActivity
 
 - `health` パッケージの要件に従い、`MainActivity` は `FlutterFragmentActivity` を継承する(権限リクエストの ActivityResult を受けるため)
-- MethodChannel を 2 本実装する: `health_pixcel/health_connect_settings`(下記)と `health_pixcel/launch`(起動理由の取得)
-- `launchMode` は Flutter 既定(`singleTop`)のまま変えない。`onNewIntent` は扱わない(コールドスタート時の起動インテントのみ対応。機能設計書「起動理由の取得」)
+- MethodChannel を 1 本実装する: `health_pixcel/health_connect_settings`(下記)。起動理由は MethodChannel ではなく Flutter の初期ルートで渡す(下記)
+- `launchMode` は Flutter 既定(`singleTop`)のまま変えない。`onNewIntent` は扱わない(機能設計書「起動理由の取得」)
 
-### 起動理由の取得(`health_pixcel/launch`)
+### 起動理由の取得(初期ルート)
 
-- メソッド: `getLaunchAction`。`onCreate` 時点の `intent.action` を返す
-  - `androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE` または `android.intent.action.VIEW_PERMISSION_USAGE` → 文字列 `"permissionRationale"`
-  - それ以外 → `"normal"`
-- Dart 側(`lib/data/platform_channels.dart` の `LaunchChannel`)は文字列を `LaunchAction` に変換する。未知の値・例外は `LaunchAction.normal`
+- `MainActivity` は `FlutterFragmentActivity.getInitialRoute()` をオーバーライドし、`intent.action` が `androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE` または `android.intent.action.VIEW_PERMISSION_USAGE` なら `"/permission-rationale"` を返す(それ以外は既定の動作)
+- 初期ルートはエンジンの生成時に Dart へ渡り、`defaultRouteName` として**最初のフレームの前に同期的に**読める。非同期の受け渡しが無いため、起動時に空の画面を挟まない
+- `app.dart` は `MaterialApp.onGenerateInitialRoutes` で最初の画面を 1 枚だけ積む(`home` を使うと `/permission-rationale` を route table で解決しようとして失敗するため)
 
 ### ヘルスコネクトの設定画面を開く(`openPermissionSettings`)
 
@@ -194,7 +193,7 @@ domain       → (なし。dart:core と intl のみ)
 </manifest>
 ```
 
-- 利用目的のインテントで起動された場合、`MainActivity` は起動インテントの action を MethodChannel(`health_pixcel/launch` の `getLaunchAction`)で Dart に渡し、Dart 側は `PermissionRationaleScreen` を最初の画面として表示する
+- 利用目的のインテントで起動された場合、`MainActivity` は初期ルート `/permission-rationale` で Dart に伝え、Dart 側は `PermissionRationaleScreen` を最初の画面として表示する
 - `ACTIVITY_RECOGNITION` は宣言しない。`health` パッケージの README ではステップ取得に必要とされているが、これは Google Fit 時代の要件であり、ヘルスコネクト経由の読み取りには `READ_STEPS` のみが必要と想定する。**最初の実装チケットで実機確認し**、必要だった場合は宣言を追加して PRD「セキュリティ・プライバシー」に理由を追記する(`check-release-permissions.sh` の許可リストも同時に更新する)
 
 ### 最初の実装チケットで確認する事項
@@ -322,7 +321,7 @@ domain       → (なし。dart:core と intl のみ)
 
 **P2 iOS 対応の注記**:
 
-1. **プラットフォーム固有コード(Kotlin の MethodChannel)は移植対象ではない**。`openPermissionSettings` の Kotlin 実装を呼ぶのは `HealthConnectRepository` だけで、iOS では `AppleHealthRepository` 側に別実装を書く。iOS には特定アプリのヘルスケア権限画面を直接開く公開 API がないため、`url_launcher` で設定アプリ(`app-settings:`)を開き、ユーザーに「ヘルスケア」→ 本アプリの順に操作してもらう案内を出す想定(Swift は不要の見込み)。起動インテントの取得(`getLaunchAction`)は iOS では常に「該当なし」を返す
+1. **プラットフォーム固有コード(Kotlin の MethodChannel)は移植対象ではない**。`openPermissionSettings` の Kotlin 実装を呼ぶのは `HealthConnectRepository` だけで、iOS では `AppleHealthRepository` 側に別実装を書く。iOS には特定アプリのヘルスケア権限画面を直接開く公開 API がないため、`url_launcher` で設定アプリ(`app-settings:`)を開き、ユーザーに「ヘルスケア」→ 本アプリの順に操作してもらう案内を出す想定(Swift は不要の見込み)。起動理由(初期ルート)は iOS では常に通常起動になる
 2. **iOS(HealthKit)は読み取り権限の許可状態をアプリに開示しない**(`hasPermissions` が `null` を返す)。MVP の「片方だけ未許可ならそのセクションに案内」(機能設計書 UC3 / F4)は iOS では判定できないため、iOS では権限状態の分岐をやめ、「7 日間記録なしの場合は、権限またはデータのいずれかに問題がある」旨の案内に統合する。`HealthRepository.checkPermissions()` の戻り値に「不明(unknown)」を追加し、`DashboardController` の分岐を拡張する必要がある(iOS 対応着手時に機能設計書を更新する)
 
 ## テスト戦略

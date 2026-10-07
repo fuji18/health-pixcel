@@ -361,15 +361,16 @@ typedef _Snapshot = ({
 | `SleepSection` | `MetricResult<DailySleep>` を受け取り、同上 |
 | `StatusMessage` | 案内・エラーの共通表示(見出し + 説明 + 操作ボタン) |
 | `PermissionRationaleScreen` | 権限の利用目的の説明画面(ヘルスコネクトから「利用目的」を開いたときの表示先。案内画面の「詳しく見る」からも開く) |
-| `HealthPixcelApp`(`app.dart`) | `launchActionProvider` を見て最初の画面を決める(`permissionRationale` → `PermissionRationaleScreen`、それ以外 → `DashboardScreen`)。判定中は空の `Scaffold` を表示する |
+| `HealthPixcelApp`(`app.dart`) | `launchActionProvider` を見て最初の画面を決める(`permissionRationale` → `PermissionRationaleScreen`、それ以外 → `DashboardScreen`)。起動理由は同期的に決まるため、判定待ちの画面は無い |
 
 ウィジェットは状態の表示だけを担い、日付計算・フォーマット以外のロジックを持たない。
 
 ### 起動理由の取得(LaunchAction)
 
-- `lib/data/platform_channels.dart` の `LaunchChannel.getLaunchAction()` が MethodChannel `health_pixcel/launch` の `getLaunchAction` を呼び、`LaunchAction` を返す(失敗時は `normal`)
-- 画面からは `lib/presentation/providers.dart` の `launchActionProvider`(`FutureProvider<LaunchAction>`)経由でのみ参照する(`app.dart` が `lib/data/` を直接 import しないため)
-- **MVP ではコールドスタート時の起動インテントだけを扱う**。アプリが既に起動している状態で「利用目的」を開かれた場合(`onNewIntent`)は扱わず、ダッシュボードが前面に出るだけとする
+- `MainActivity` が利用目的のインテントを受けたとき、Flutter の初期ルート `/permission-rationale` を渡す(`architecture.md`「起動理由の取得(初期ルート)」)
+- `lib/presentation/providers.dart` の `launchActionProvider`(`Provider<LaunchAction>`)が起動時のルート名を `LaunchAction` に変換する(`/permission-rationale` → `permissionRationale`、それ以外 → `normal`)。画面はこのプロバイダー経由でのみ参照する
+- **起動理由は `MainActivity` のインスタンスが生成されたときに決まる**。`launchMode` は `singleTop` だが、ヘルスコネクトは自分の画面の上に `MainActivity` を開くため、アプリが既に起動していても通常は**新しいインスタンス**ができ、利用目的画面が出る想定(「閉じる」でそのインスタンスだけが終了し、ヘルスコネクトの画面に戻る。#10 の実機確認で確かめる)
+- 例外として、`MainActivity` がタスクの最前面にある状態で利用目的のインテントが届いた場合は `onNewIntent` になる。これは扱わず、表示中の画面のままとする(MVP)
 
 ### PermissionRationaleScreen の内容
 
@@ -656,7 +657,7 @@ MVP では健康データをファイル・データベースに保存しない�
 - `DashboardController`: フェイクのリポジトリで、利用不可 / 両方未許可 / 片方未許可 / 許可後の自動再読み込み / 読み取り失敗 / 読み込み中の `unavailable` → `DashboardUnavailable` / `refresh()` 中に前回の値が残る / `_fetch()` の多重呼び出しが 1 回に合流する / 権限ダイアログ中の `onResumed()` が無視される / 権限が変わらない復帰で再読み込みしない
 - `isAllEmpty`: 定義の 3 条件の組み合わせ(片方未許可 + 片方全日記録なし → `true`、片方 `MetricFailed` → `false`)
 - `DashboardController` の追加ケース: 利用不可で終わった `_fetch()` の後、更新して復帰 → 再読み込みされる / 権限なしで終わった後、何も変えずに復帰 → 再読み込みされない / 実行中の `refresh()` があるときの `requestPermissions()` → 許可後の権限状態で表示される / `requestPermissions()` が例外 → `_requestingPermission` が `false` に戻る
-- `HealthPixcelApp`: `launchActionProvider` を override し、`permissionRationale` → `PermissionRationaleScreen`、`normal` → `DashboardScreen` が最初に表示される
+- `HealthPixcelApp`: 起動時のルート名(`defaultRouteNameTestValue`)が `/permission-rationale` → `PermissionRationaleScreen`、`/` や未知の値 → `DashboardScreen` が最初のフレームから表示される
 - `PermissionRationaleScreen`: 本文の箇条書きが表示され、「詳しく見る」から開いた場合に「閉じる」で元の画面に戻る
 
 ### ウィジェットテスト(`flutter test`)

@@ -162,7 +162,7 @@ try {
 
 ### Kotlin(MainActivity)
 
-- 書くのは `architecture.md` で定義した MethodChannel 2 本だけ。ロジックを Kotlin 側に増やさない
+- 書くのは `architecture.md` で定義した MethodChannel 1 本と初期ルートのオーバーライドだけ。ロジックを Kotlin 側に増やさない
 - 失敗時は例外を Dart に投げず、`false` / `null` を返す
 
 ## Git 運用ルール

@@ -78,7 +78,7 @@ lib/application/
 lib/data/
 ├── health_repository.dart            # HealthRepository(抽象)/ HealthReadException
 ├── health_connect_repository.dart    # HealthConnectRepository(health パッケージで実装)
-└── platform_channels.dart            # health_pixcel/health_connect_settings・health_pixcel/launch のラッパー
+└── platform_channels.dart            # health_pixcel/health_connect_settings のラッパー
 ```
 
 **依存関係**:
@@ -153,7 +153,7 @@ android/
         ├── main/
         │   ├── AndroidManifest.xml       # ヘルスコネクト権限・queries・利用目的の alias・allowBackup=false
         │   └── kotlin/io/github/fuji18/healthpixcel/
-        │       └── MainActivity.kt       # FlutterFragmentActivity・MethodChannel 2 本
+        │       └── MainActivity.kt       # FlutterFragmentActivity・MethodChannel 1 本・初期ルート
         ├── release/
         │   └── AndroidManifest.xml       # INTERNET 権限の除去(tools:node="remove")
         ├── debug/AndroidManifest.xml     # Flutter 生成のまま(変更しない)

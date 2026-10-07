@@ -34,7 +34,7 @@ health-pixcel のドキュメントとコードで使う用語の定義。**ド�
 | 案内・エラーの共通表示 | `StatusMessage` | アーキテクチャ用語 |
 | 読み取りエラー | `HealthReadException` / `HealthErrorKind` | エラー・例外 |
 | ヘルスコネクト用の実装 | `HealthConnectRepository` | アーキテクチャ用語 |
-| 起動理由の取得 | `LaunchChannel` / `launchActionProvider` | ステータス・状態 |
+| 起動理由の取得 | `launchActionProvider`(初期ルート `/permission-rationale`) | ステータス・状態 |
 | 権限の利用目的画面 | `PermissionRationaleScreen` | 技術用語 |
 | 設定画面・ストアを開く操作 | `openSettings` / `openStore`(Controller)、`openPermissionSettings` / `openHealthConnectStore`(Repository) | アーキテクチャ用語 |
 | 書き込み元 | `sourceName` / `sourceId`(参照しない) | ドメイン用語 |
@@ -200,7 +200,7 @@ health-pixcel のドキュメントとコードで使う用語の定義。**ド�
 
 **定義**: Flutter の Dart コードと Android(Kotlin)/ iOS(Swift)のネイティブコードを呼び合う仕組み。
 
-**本プロジェクトでの用途**: ヘルスコネクトの設定画面を開く(`health_pixcel/health_connect_settings`)、起動インテントの取得(`health_pixcel/launch`)の 2 本だけ。
+**本プロジェクトでの用途**: ヘルスコネクトの設定画面を開く(`health_pixcel/health_connect_settings`)の 1 本だけ。起動理由は MethodChannel ではなく Flutter の初期ルートで受け取る。
 
 ### マージ済みマニフェスト
 
@@ -339,7 +339,7 @@ presentation ──→ application ──→ domain
 | 状態 | 意味 |
 |---|---|
 | `normal` | ランチャー等からの通常起動 |
-| `permissionRationale` | ヘルスコネクトの権限画面から「利用目的」を開いて起動された(コールドスタート時のみ判定) |
+| `permissionRationale` | ヘルスコネクトの権限画面から「利用目的」を開いて `MainActivity` が生成された(インスタンスの生成時のみ判定。`onNewIntent` は扱わない) |
 
 ## データモデル用語
 
