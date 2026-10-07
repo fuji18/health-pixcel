@@ -118,6 +118,7 @@ domain       → (なし。dart:core と intl のみ)
 - `DashboardController` は `AsyncNotifier<DashboardState>` として実装する。状態遷移の規則(どの操作で `AsyncLoading` に戻すか、`refresh()` で前回値を保つこと、多重実行の抑止)は機能設計書「DashboardController」が正。`AsyncError` は発生させない(例外は `_fetch()` 内で捕捉して `MetricFailed` に変換する)
 - `refresh()` は `state` を `AsyncLoading` にせず、`_fetch()` の完了後に `state = AsyncData(...)` で置き換える(全画面のローディングに戻さないため)
 - **Riverpod 3 の既定動作の確認**: Riverpod 3 は失敗したプロバイダーの自動リトライと、画面が見えていない間の購読の一時停止を既定で行う。最初の実装チケットで実際の挙動を確認し、`_fetch()` が例外を外に出さない設計と矛盾しないこと(自動リトライが走らないこと)を確かめる。必要なら `ProviderScope(retry: (_, __) => null)` で自動リトライを無効にする
+  - **確認結果(#7、3.4.3)**: `_fetch()` が例外を外に出さないため `build()` は失敗せず、自動リトライは走らない(想定外の例外のテストで `hasError == false` を確認)。`ProviderScope` の `retry` は指定しない。購読の一時停止は購読者がいないときに起きるため、ユニットテストでは `container.listen` で常に購読しておく
 - 画面は `ref.watch(dashboardControllerProvider)` で状態を購読し、操作は `ref.read(dashboardControllerProvider.notifier)` 経由で呼ぶ
 - ライフサイクルの復帰検知は `DashboardScreen` で `AppLifecycleListener(onResume: ...)` を使い、`onResumed()` を呼ぶ
 - `ProviderScope` は `main.dart` の最上位に 1 つだけ置く
