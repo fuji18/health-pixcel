@@ -53,21 +53,36 @@ graph TB
 
 `DashboardState`(プレゼンテーション層の `lib/presentation/dashboard/dashboard_state.dart` に置く)以外はすべてドメイン層の不変クラス。いずれも健康データの値を含むため `toString()` を独自実装しない(誤ってログに出したときに値が出ないようにする。詳細は「セキュリティ考慮事項」)。
 
-### エンティティ: DateRange(直近 7 日の範囲)
+### エンティティ: DisplayPeriod(表示期間)
 
 ```dart
-/// 直近 7 日(今日を含む)を表す。日付はローカルタイムゾーンの 00:00。
+/// ダッシュボードの表示期間(P1。#20)
+enum DisplayPeriod {
+  week(7),    // 直近 7 日。起動時の既定(選んだ期間は保存しない)
+  month(30);  // 直近 30 日
+
+  final int dayCount;  // 今日を含む日数
+}
+```
+
+- 「月」は暦の月ではなく**今日を含む直近 30 日**とする(暦の月は月初に 1〜2 日しか出ず、日数も揺れるため。#20 で決定)
+- 表示ラベル(「7 日」「30 日」)はドメインに置かず画面が持つ
+
+### エンティティ: DateRange(直近 N 日の範囲)
+
+```dart
+/// 直近 N 日(今日を含む)を表す。日付はローカルタイムゾーンの 00:00。N は DisplayPeriod.dayCount(7 / 30)
 class DateRange {
   final DateTime now;              // 範囲を決めた時点の現在時刻(ローカル)。読み取りの終端に使う
   final DateTime today;            // 今日の 00:00(ローカル)
-  final List<DateTime> days;       // 新しい順の 7 日分 [today, today-1, ..., today-6]
+  final List<DateTime> days;       // 新しい順の N 日分 [today, today-1, ..., today-(N-1)]
 
-  DateTime get oldestDay;          // today - 6 日
+  DateTime get oldestDay;          // today - (N-1) 日
 }
 ```
 
 **制約**:
-- `days.length == 7`、要素は時刻 00:00 のローカル `DateTime`
+- `days.length == N`(7 または 30)、要素は時刻 00:00 のローカル `DateTime`
 - 1 回の読み込みでは時計を 1 回だけ読み、`today` と読み取りの終端(`now`)を同じ時刻から決める(0 時をまたいだときに「今日」と終端がずれないようにするため)
 - 「1 日前」は `DateTime(y, m, d - 1)` で求める(`subtract(Duration(days: 1))` は夏時間をまたぐと 00:00 からずれるため使わない)
 
@@ -155,6 +170,7 @@ class DashboardNeedsPermission extends DashboardState {}
 
 /// 少なくとも片方が許可済み(F2 / F3 / F4)
 class DashboardReady extends DashboardState {
+  final DisplayPeriod period;   // 表示期間。range.days.length == period.dayCount
   final DateRange range;
   final MetricResult<DailySteps> steps;
   final MetricResult<DailySleep> sleep;
@@ -167,9 +183,9 @@ class DashboardReady extends DashboardState {
 **`isAllEmpty` の定義**: 次の 3 条件をすべて満たすとき `true`。
 1. `steps` / `sleep` のどちらも `MetricFailed` ではない
 2. 少なくとも一方が `MetricLoaded`
-3. `MetricLoaded` であるものはすべて、7 日とも記録なし(歩数は `steps == null`、睡眠は `hasRecord == false`)
+3. `MetricLoaded` であるものはすべて、期間内の全日が記録なし(歩数は `steps == null`、睡眠は `hasRecord == false`)
 
-`MetricPermissionDenied` の種別は判定から除外する(例: 歩数が未許可、睡眠が 7 日とも記録なし → `true`)。
+`MetricPermissionDenied` の種別は判定から除外する(例: 歩数が未許可、睡眠が期間内の全日とも記録なし → `true`)。
 
 ### ER図
 
@@ -260,8 +276,8 @@ class HealthReadException implements Exception {
 ### WeeklySummaryService(アプリケーション層)
 
 **責務**:
-- 今日の日付から `DateRange` を作る
-- リポジトリから 7 日分を読み、`DailySteps` / `DailySleep` の 7 件リストに組み立てる
+- 今日の日付と日数(7 / 30)から `DateRange` を作る
+- リポジトリから期間の日数分を読み、`DailySteps` / `DailySleep` の N 件リストに組み立てる
 - 歩数・睡眠を**独立に**取得し、片方の失敗がもう片方の表示を妨げないようにする
 
 **インターフェース**:
@@ -272,8 +288,8 @@ class WeeklySummaryService {
   final HealthRepository _repository;
   final DateTime Function() _clock;   // テストで「今日」を固定するため注入する
 
-  /// 時計を 1 回だけ読んで DateRange を作る
-  DateRange currentRange();
+  /// 時計を 1 回だけ読んで直近 dayCount 日の DateRange を作る
+  DateRange currentRange({int dayCount = 7});
 
   /// 読み取りの終端には range.now を使い、時計を読み直さない
   Future<MetricResult<DailySteps>> loadSteps(DateRange range);
@@ -288,7 +304,8 @@ class WeeklySummaryService {
 ### DashboardController(プレゼンテーション層・状態管理)
 
 **責務**:
-- 起動時・再読み込み時の状態遷移を管理し、画面状態を公開する
+- 起動時・再読み込み時・表示期間の切り替え時の状態遷移を管理し、画面状態を公開する
+- 表示期間(`DisplayPeriod`)を保持する(起動時は `week`。保存しない)
 - 権限状態に応じて、許可済みの種別だけを `WeeklySummaryService` で読み込む
 - 権限リクエストの起動と、許可直後の再読み込み(F1: 再起動不要)
 - アプリがフォアグラウンドに戻ったとき(設定画面から戻った場合など)に権限状態を再確認する
@@ -304,12 +321,15 @@ class DashboardController extends AsyncNotifier<DashboardState> {
   Future<bool> openSettings();         // 「ヘルスコネクトの設定を開く」操作。開けなかったら false
   Future<bool> openStore();            // 「ヘルスコネクトを更新する」操作。開けなかったら false
   Future<void> onResumed();            // フォアグラウンド復帰時
+  Future<void> selectPeriod(DisplayPeriod period);  // 「7 日 / 30 日」の切り替え操作
 
   // private
   Future<DashboardState> _fetch({bool force = false});  // 利用可否 → 権限 → 読み込み → DashboardState を組み立てる
   Future<DashboardState>? _inFlight;   // 実行中の _fetch(多重実行の抑止)
   bool _requestingPermission = false;  // 権限ダイアログ表示中
   _Snapshot? _lastSnapshot;            // 直近の _fetch が最終的に採用した利用可否・権限状態
+  DisplayPeriod _period = DisplayPeriod.week;  // 表示期間
+  bool _isCurrent(DashboardState s);   // s が DashboardReady 以外か、period が _period と一致するか
 }
 
 /// 利用可否が available 以外のときは権限を取得しないため null
@@ -329,22 +349,25 @@ typedef _Snapshot = ({
 | `refresh()` | **前回の値を表示したまま** `_fetch()` を実行し、完了したら `AsyncData(新しい値)` に置き換える(全画面のローディングには戻さない)。引っぱって更新の `RefreshIndicator` はこの Future の完了を待つ |
 | `requestPermissions()` | `_requestingPermission = true` → `repository.requestPermissions()` を `try` / `finally` で囲み、`finally` で必ず `false` に戻す → `AsyncLoading`(値なし)→ `AsyncData(_fetch(force: true) の結果)`。`repository.requestPermissions()` が例外を投げても画面状態はエラーにせず、そのまま `_fetch(force: true)` に進む(権限状態を読み直して表示する) |
 | `onResumed()` | `_requestingPermission` が `true` なら何もしない(権限ダイアログから戻った時の復帰は `requestPermissions()` 側で処理するため)。それ以外は現在の利用可否を `checkAvailability()` で取り、`available` のときだけ `checkPermissions()` も呼んで `_Snapshot` を作る。`_lastSnapshot` と異なれば(`_lastSnapshot` が `null` の場合も含む)`refresh()` を呼ぶ。確認中に例外が出たら `refresh()` を呼ぶ |
+| `selectPeriod(period)` | `period` が `_period` と同じなら何もしない。異なれば `_period = period` → `AsyncLoading`(値なし)→ `AsyncData(_fetch(force: true) の結果)`。切り替え中は全体のローディングを表示する(前回の値を残すと、選んだ期間と違う日数のリストが見え続けるため) |
 | `openSettings()` | `repository.openPermissionSettings()` の結果を返す(例外は `false`。状態は変えない)。`false` なら**画面が** `ScaffoldMessenger` で「ヘルスコネクトを開けませんでした」を表示する(コントローラーは `BuildContext` を持たないため。#7 で変更)。戻ってきたときの反映は `onResumed()` に任せる |
 | `openStore()` | `repository.openHealthConnectStore()` の結果を返す(例外は `false`。状態は変えない)。`false` なら画面がスナックバー「Play ストアを開けませんでした」を表示する。戻ってきたときの反映は `onResumed()` に任せる |
+
+**古い期間の結果を捨てる**: `refresh()` / `requestPermissions()` / `selectPeriod()` は、`_fetch` の結果が `_isCurrent` を満たさない(= 期間を変える前に始まった読み込みの `DashboardReady`)とき `state` を更新しない。期間を変えた側(`selectPeriod`)が新しい期間で必ず `_fetch(force: true)` を走らせて `state` を設定するため、捨ててよい(`refresh()` が古い期間の実行中 Future に合流した場合や、`selectPeriod` の連続呼び出しで起こる)。
 
 **`_fetch({force})` の多重実行の扱い**:
 - `force == false` で `_inFlight` が実行中 → その Future を返す(合流する。引っぱって更新の連打や復帰の重なり向け)
 - `force == true` で `_inFlight` が実行中 → その完了を待ってから(結果は捨てる)新たに実行する(権限リクエスト直後に、許可前に始まった古い読み込み結果を使わないため)
 - 新たに実行するときは、その Future を `_inFlight` に入れ、`whenComplete` で「`_inFlight` が自分自身なら `null` に戻す」
 
-**`_fetch()` の本体の手順**:
+**`_fetch()` の本体の手順**(冒頭で `_period` を 1 回だけ読んで `period` とし、以降はそれを使う):
 1. `checkAvailability()` が `available` 以外 → `_lastSnapshot = (availability, permissions: null)` として `DashboardUnavailable(availability)` を返す
 2. `checkPermissions()` を呼び、`_lastSnapshot = (available, permissions)` に更新する
 3. 両方 `denied` → `DashboardNeedsPermission` を返す
-4. `currentRange()` で範囲を決め、許可済みの種別だけ `loadSteps` / `loadSleep` を並行実行する(未許可の種別は `MetricPermissionDenied`)
+4. `currentRange(dayCount: period.dayCount)` で範囲を決め、許可済みの種別だけ `loadSteps` / `loadSleep` を並行実行する(未許可の種別は `MetricPermissionDenied`)
 5. どちらかが `MetricFailed(unavailable)` なら `checkAvailability()` を再確認する。`available` 以外なら `_lastSnapshot = (availability, permissions: null)` として `DashboardUnavailable(availability)` を返す。`available` のままなら `MetricFailed(readFailed)` に読み替えて次へ進む
-6. `DashboardReady(range, steps, sleep)` を返す
-7. 1〜6 のどこで想定外の例外が出ても捕捉し、`_lastSnapshot = null` にしたうえで `DashboardReady(range, MetricFailed(readFailed), MetricFailed(readFailed))` を返す(範囲が未確定なら `currentRange()` で作る。`_lastSnapshot = null` により次の復帰で必ず再読み込みされる)。値をログに出さない
+6. `DashboardReady(period, range, steps, sleep)` を返す
+7. 1〜6 のどこで想定外の例外が出ても捕捉し、`_lastSnapshot = null` にしたうえで `DashboardReady(period, range, MetricFailed(readFailed), MetricFailed(readFailed))` を返す(範囲が未確定なら `currentRange(dayCount: period.dayCount)` で作る。`_lastSnapshot = null` により次の復帰で必ず再読み込みされる)。値をログに出さない
 
 **`_lastSnapshot` の不変条件**: `_fetch()` が値を返した時点で、`_lastSnapshot` はその戻り値を決めたときの利用可否・権限状態と一致している(どの出口から返った場合も)。
 
@@ -356,8 +379,8 @@ typedef _Snapshot = ({
 
 | コンポーネント | 責務 |
 |---|---|
-| `DashboardScreen` | 唯一の画面。`DashboardState` に応じて以下を出し分ける |
-| `StepsSection` | `MetricResult<DailySteps>` を受け取り、7 行の一覧・未許可案内・エラー表示のいずれかを描画 |
+| `DashboardScreen` | 唯一の画面。`DashboardState` に応じて以下を出し分ける。`DashboardReady` のときだけリスト先頭に期間の切り替え(`SegmentedButton<DisplayPeriod>`。「7 日」「30 日」)を置く |
+| `StepsSection` | `MetricResult<DailySteps>` を受け取り、期間の日数分(7 / 30 行)の一覧・未許可案内・エラー表示のいずれかを描画 |
 | `SleepSection` | `MetricResult<DailySleep>` を受け取り、同上 |
 | `StatusMessage` | 案内・エラーの共通表示(見出し + 説明 + 操作ボタン) |
 | `PermissionRationaleScreen` | 権限の利用目的の説明画面(ヘルスコネクトから「利用目的」を開いたときの表示先。案内画面の「詳しく見る」からも開く) |
@@ -377,7 +400,7 @@ typedef _Snapshot = ({
 見出し「健康データの利用について」。本文は次の箇条書き:
 
 - 読み取るデータ: 歩数・睡眠(就寝・起床時刻)
-- 使い道: 直近 7 日の歩数と睡眠を、このアプリの画面に表示するためだけに使います
+- 使い道: 直近 7 日または 30 日の歩数と睡眠を、このアプリの画面に表示するためだけに使います
 - 送信: データを端末の外に送信しません(このアプリはインターネットに接続する権限を持っていません)
 - 保存・書き込み: データをアプリ内に保存せず、ヘルスコネクトへの書き込みも行いません
 - 取り消し: 権限はヘルスコネクトの設定からいつでも取り消せます
@@ -472,16 +495,16 @@ stateDiagram-v2
 
 ## アルゴリズム設計
 
-### A1. 直近 7 日の日付範囲の計算
+### A1. 直近 N 日の日付範囲の計算
 
-**目的**: 「今日を含む 7 日」をローカル日付で求める
+**目的**: 「今日を含む N 日」(N = 7 / 30)をローカル日付で求める
 
 ```dart
-DateRange buildDateRange(DateTime now) {
+DateRange buildDateRange(DateTime now, {int dayCount = 7}) {
   final local = now.toLocal();
   final today = DateTime(local.year, local.month, local.day);
   final days = [
-    for (var i = 0; i < 7; i++) DateTime(today.year, today.month, today.day - i),
+    for (var i = 0; i < dayCount; i++) DateTime(today.year, today.month, today.day - i),
   ];
   return DateRange(now: local, today: today, days: days);
 }
@@ -492,10 +515,10 @@ DateTime nextDay(DateTime day) => DateTime(day.year, day.month, day.day + 1);
 
 ### A2. 日別歩数の取得
 
-**目的**: 7 日分の日別歩数を、記録なしと区別して取得する
+**目的**: 期間の日数分(7 / 30 日)の日別歩数を、記録なしと区別して取得する
 
 1. `range.days` の各日 `d` について `readTotalSteps(d, nextDay(d))` を呼ぶ。ただし今日は終端を `range.now` にする
-2. 7 回の呼び出しは `Future.wait` で並行に実行する
+2. N 回の呼び出しは `Future.wait` で並行に実行する。`readTotalSteps` はヘルスコネクトの集計(aggregate)API による区間ごとの合計で、30 日表示でも生データは取得しない(`getHealthIntervalDataFromTypes` の固定長バケットは夏時間の日に 00:00 からずれるため使わない)
 3. 戻り値が `null` → `DailySteps(steps: null)`(記録なし。リポジトリが `0` を `null` に変換済み。プラグインの `null` = 読み取り失敗はリポジトリが `HealthReadException` にする)
 4. 1 日でも `HealthReadException` が出た場合は、歩数全体を `MetricFailed` にする(部分的な表示はしない。欠けた日を「記録なし」と誤表示しないため)
 
@@ -510,7 +533,7 @@ DateTime nextDay(DateTime day) => DateTime(day.year, day.month, day.day + 1);
 3. `range.days` に含まれない日付(最古日より前に起床したもの)は捨てる
 4. 各日のセッションを `start` の昇順に並べる
 5. 同一の `start`/`end` を持つセッションが複数ある場合は 1 件にまとめる(書き込み元の重複対策。`sourceName` は見ない)
-6. 7 日分すべてについて `DailySleep` を作る(セッションがない日は `sessions: []`)
+6. 期間の日数分(7 / 30 日)すべてについて `DailySleep` を作る(セッションがない日は `sessions: []`)
 
 ```dart
 List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions) {
@@ -554,22 +577,24 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 ┌────────────────────────────────┐
 │ health-pixcel                  │
 ├────────────────────────────────┤
+│ [   7 日   |   30 日   ]        │  ← 期間の切り替え(全幅の SegmentedButton)
 │ 睡眠                            │
 │ 今日 10/6(火)  23:45→06:57 7時間12分 │
 │ 昨日 10/5(月)  00:10→07:20 7時間50分 │  ← 日別合計
 │                13:00→13:40          │  ← 同日の2件目
 │ 10/4(日)       記録なし             │
-│ …(7行)                          │
+│ …(7行 / 30行)                   │
 ├────────────────────────────────┤
 │ 歩数                            │
 │ 今日 10/6(火)   3,210 歩 (途中)     │
 │ 昨日 10/5(月)   8,432 歩           │
 │ 10/4(日)        記録なし           │
-│ …(7行)                          │
+│ …(7行 / 30行)                   │
 └────────────────────────────────┘
 ```
 
 - 朝に確認することが多い(PRD ペルソナ)ため、**睡眠を上、歩数を下**に置く
+- 期間の切り替えはデータなし案内より上に置く。起動時は常に「7 日」が選ばれている
 - 両セクションとも新しい日が上。Pixel 10 の縦画面でスクロールせずに少なくとも今日〜直近数日分が見えること
 
 ### 表示項目
@@ -593,14 +618,14 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 
 | 状態 | 表示 | 操作 |
 |---|---|---|
-| `AsyncLoading`(`isLoading`。権限リクエスト後は前回の値を伴う) | ローディングインジケーター | なし |
+| `AsyncLoading`(`isLoading`。権限リクエスト後・期間の切り替え後は前回の値を伴う) | ローディングインジケーター(期間の切り替えも隠れる) | なし |
 | `DashboardUnavailable(notInstalled)` | 「ヘルスコネクトを利用できません」+「Play ストアでヘルスコネクトの状態を確認してください」 | 「Play ストアを開く」(`openStore()`) |
 | `DashboardUnavailable(updateRequired)` | 「ヘルスコネクトの更新が必要です」 | 「ヘルスコネクトを更新する」(`openStore()`) |
 | `DashboardNeedsPermission` | 「歩数と睡眠を表示するには、ヘルスコネクトの読み取り権限が必要です。データの読み取りのみ行い、端末の外には送信しません」 | 「権限を許可する」/「ヘルスコネクトの設定を開く」/「詳しく見る」(`PermissionRationaleScreen` へ) |
 | `Ready` + セクションが `MetricPermissionDenied` | そのセクション内に「[歩数/睡眠] の権限が許可されていません」 | 「権限を許可する」/「ヘルスコネクトの設定を開く」 |
 | `AsyncError`(通常発生しない) | 「データを読み込めませんでした」 | 「再読み込み」(`refresh()`) |
 | `Ready` + セクションが `MetricFailed` | そのセクション内に「データを読み込めませんでした」 | 「再読み込み」 |
-| `Ready` + `isAllEmpty` | 画面上部に「ヘルスコネクトにデータがありません。Health Sync の同期設定を確認してください」 | 「再読み込み」(各セクションは 7 行とも「記録なし」で表示) |
+| `Ready` + `isAllEmpty` | 画面上部に「ヘルスコネクトにデータがありません。Health Sync の同期設定を確認してください」 | 「再読み込み」(各セクションは期間の全行が「記録なし」で表示) |
 
 - 権限ダイアログを 2 回拒否するとヘルスコネクトはダイアログを出さなくなるため、「権限を許可する」が効かないときの逃げ道として「ヘルスコネクトの設定を開く」を常に併記する
 
@@ -616,10 +641,10 @@ MVP では健康データをファイル・データベースに保存しない�
 
 ## パフォーマンス最適化
 
-- **歩数の 7 回呼び出しを並行実行**: `Future.wait` で並べる(A2)
+- **歩数の N 回(7 / 30 回)呼び出しを並行実行**: `Future.wait` で並べる(A2)
 - **歩数と睡眠を並行取得**: `loadSteps` と `loadSleep` を同時に開始する
-- **睡眠は 1 回のクエリ**: 8 日分を 1 回で取得し、端末内で振り分ける(A3)
-- 目標: 起動から表示まで 3 秒以内、再読み込みは 2 秒以内(PRD「パフォーマンス」)
+- **睡眠は 1 回のクエリ**: N + 1 日分(8 / 31 日分)を 1 回で取得し、端末内で振り分ける(A3)
+- 目標: 起動から表示まで 3 秒以内(30 日表示でも)、再読み込みは 2 秒以内(PRD「パフォーマンス」)
 
 ## セキュリティ考慮事項
 
@@ -649,7 +674,7 @@ MVP では健康データをファイル・データベースに保存しない�
 ## テスト戦略
 
 ### ユニットテスト(`flutter test`)
-- `buildDateRange`: 通常日・月またぎ・年またぎ・23:59 で 7 日が 00:00 に揃い、`now` が保持される(夏時間の検証は任意。対象端末の日本には夏時間がないため、`DateTime(y, m, d ± n)` を使う規約で担保する)
+- `buildDateRange`: 通常日・月またぎ・年またぎ・23:59 で 7 日・30 日が 00:00 に揃い、`now` が保持される(30 日は 2 月を含む月またぎ・年またぎも。夏時間の検証は任意。対象端末の日本には夏時間がないため、`DateTime(y, m, d ± n)` を使う規約で担保する)
 - `assignSleepToDays`: 日付をまたぐ睡眠が起床日に入る / 最古日より前に起床したセッションが除外される / 同日 2 件(昼寝)が昇順に並ぶ / 重複セッションが 1 件になる / セッションがない日が空リストになる
 - A4 のフォーマット関数(`7時間12分` / `45分` / `8,432 歩` / `今日 10/6(火)`。2026-10-06 基準)
 - `HealthConnectRepository`: フェイクの `Health` を注入し、歩数の `0` → `null`・`null` → `readFailed` / `dateTo <= dateFrom` のセッションの破棄と `toLocal()` / `UnsupportedError` → `unavailable`・その他の例外 → `readFailed` / `configure()` が 1 回だけ呼ばれること / 権限が種別ごとに判定されること

@@ -94,6 +94,59 @@ void main() {
     });
   });
 
+  group('buildDateRange 30 日', () {
+    test('通常', () {
+      final r = buildDateRange(DateTime(2026, 10, 6, 9, 30), dayCount: 30);
+      expect(r.days.length, 30);
+      expect(r.days.first, DateTime(2026, 10, 6));
+      expect(r.days[1], DateTime(2026, 10, 5));
+      expect(r.oldestDay, DateTime(2026, 9, 7));
+      expect(r.today, DateTime(2026, 10, 6));
+    });
+
+    test('月またぎ(2 月を含む)', () {
+      final r = buildDateRange(DateTime(2026, 3, 15, 12), dayCount: 30);
+      expect(r.days[14], DateTime(2026, 3, 1));
+      expect(r.days[15], DateTime(2026, 2, 28));
+      expect(r.oldestDay, DateTime(2026, 2, 14));
+    });
+
+    test('年またぎ', () {
+      final r = buildDateRange(DateTime(2026, 1, 10, 12), dayCount: 30);
+      expect(r.days[9], DateTime(2026, 1, 1));
+      expect(r.days[10], DateTime(2025, 12, 31));
+      expect(r.oldestDay, DateTime(2025, 12, 12));
+    });
+
+    test('全日 00:00 かつ連続', () {
+      for (final now in [
+        DateTime(2026, 10, 6, 9, 30),
+        DateTime(2026, 3, 15, 12),
+        DateTime(2026, 1, 10, 12),
+      ]) {
+        final days = buildDateRange(now, dayCount: 30).days;
+        for (final d in days) {
+          expect(d.hour, 0);
+          expect(d.minute, 0);
+          expect(d.second, 0);
+          expect(d.millisecond, 0);
+          expect(d.microsecond, 0);
+        }
+        for (var i = 0; i < 29; i++) {
+          final d = days[i];
+          expect(DateTime(d.year, d.month, d.day - 1), days[i + 1]);
+        }
+      }
+    });
+
+    test('既定は 7 日', () {
+      expect(
+        buildDateRange(DateTime(2026, 10, 6)).days,
+        buildDateRange(DateTime(2026, 10, 6), dayCount: 7).days,
+      );
+    });
+  });
+
   group('nextDay', () {
     test('通常日 → 翌日', () {
       expect(nextDay(DateTime(2026, 10, 6)), DateTime(2026, 10, 7));

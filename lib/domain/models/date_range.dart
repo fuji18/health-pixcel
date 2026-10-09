@@ -1,4 +1,4 @@
-/// 直近 7 日(今日を含む)の範囲。日付はローカルタイムゾーンの 00:00。
+/// 直近 N 日(今日を含む)の範囲。日付はローカルタイムゾーンの 00:00。
 ///
 /// `buildDateRange` で生成する(機能設計書 A1)。
 class DateRange {
@@ -10,9 +10,9 @@ class DateRange {
   /// 今日の 00:00(ローカル)。
   final DateTime today;
 
-  /// 新しい順の 7 日分 `[today, today-1, ..., today-6]`。
+  /// 新しい順の N 日分 `[today, today-1, ..., today-(N-1)]`。
   final List<DateTime> days;
 
-  /// 最古の日(today - 6 日)。
+  /// 最古の日(today - (N-1) 日)。
   DateTime get oldestDay => days.last;
 }

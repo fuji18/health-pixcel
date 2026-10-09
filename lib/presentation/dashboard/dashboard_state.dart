@@ -1,6 +1,7 @@
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 import 'package:health_pixcel/domain/models/date_range.dart';
+import 'package:health_pixcel/domain/models/display_period.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 
@@ -25,12 +26,16 @@ class DashboardNeedsPermission extends DashboardState {
 /// 少なくとも片方が許可済み(F2 / F3 / F4)。
 class DashboardReady extends DashboardState {
   const DashboardReady({
+    required this.period,
     required this.range,
     required this.steps,
     required this.sleep,
   });
 
-  /// 表示する 7 日。
+  /// 表示期間。range.days.length == period.dayCount。
+  final DisplayPeriod period;
+
+  /// 表示する期間の日付範囲。
   final DateRange range;
 
   /// 歩数の取得結果。

@@ -6,7 +6,7 @@ import 'package:health_pixcel/domain/models/date_range.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/domain/sleep_assignment.dart';
 
-/// 直近 7 日の歩数・睡眠を組み立てる(機能設計書「WeeklySummaryService」)。
+/// 直近 N 日(7 / 30)の歩数・睡眠を組み立てる(機能設計書「WeeklySummaryService」)。
 class WeeklySummaryService {
   /// リポジトリと時計から作る。
   WeeklySummaryService(this._repository, this._clock);
@@ -15,9 +15,10 @@ class WeeklySummaryService {
   final DateTime Function() _clock;
 
   /// 時計を 1 回だけ読んで [DateRange] を作る。
-  DateRange currentRange() => buildDateRange(_clock());
+  DateRange currentRange({int dayCount = 7}) =>
+      buildDateRange(_clock(), dayCount: dayCount);
 
-  /// 7 日分の歩数。1 日でも [HealthReadException] が出たら [MetricFailed]。
+  /// 期間の日数分の歩数。1 日でも [HealthReadException] が出たら [MetricFailed]。
   Future<MetricResult<DailySteps>> loadSteps(DateRange range) async {
     try {
       final values = await Future.wait([
@@ -42,7 +43,7 @@ class WeeklySummaryService {
     }
   }
 
-  /// 7 日分の睡眠。読み取り区間は [range.oldestDay - 1 日, range.now](機能設計書 A3)。
+  /// 期間の日数分の睡眠。読み取り区間は [range.oldestDay - 1 日, range.now](機能設計書 A3)。
   Future<MetricResult<DailySleep>> loadSleep(DateRange range) async {
     final oldest = range.oldestDay;
     try {

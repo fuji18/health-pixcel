@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:health_pixcel/domain/models/display_period.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_controller.dart';
@@ -306,5 +307,107 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PermissionRationaleScreen), findsNothing);
     expect(find.text('歩数と睡眠を表示するには、ヘルスコネクトの読み取り権限が必要です'), findsOneWidget);
+  });
+
+  final periodButton = find.byType(SegmentedButton<DisplayPeriod>);
+
+  testWidgets('18 期間切り替えは Ready のときだけ出る', (tester) async {
+    final handle = tester.ensureSemantics();
+    seedData();
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(periodButton, findsOneWidget);
+    expect(find.bySemanticsLabel('表示期間'), findsOneWidget);
+    expect(find.text('7 日'), findsOneWidget);
+    expect(find.text('30 日'), findsOneWidget);
+    expect(
+      tester.widget<SegmentedButton<DisplayPeriod>>(periodButton).selected,
+      {DisplayPeriod.week},
+    );
+    expect(
+      tester.getTopLeft(periodButton).dy,
+      lessThan(tester.getTopLeft(find.text('睡眠')).dy),
+    );
+    handle.dispose();
+  });
+
+  testWidgets('18b 未許可では期間切り替えが出ない', (tester) async {
+    fake.permissions = bothDenied;
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(periodButton, findsNothing);
+  });
+
+  testWidgets('18c 利用不可では期間切り替えが出ない', (tester) async {
+    fake.availability = HealthAvailability.notInstalled;
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(periodButton, findsNothing);
+  });
+
+  testWidgets('19 30 日に切り替えると 30 日分を表示する', (tester) async {
+    seedData();
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('30 日'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SegmentedButton<DisplayPeriod>>(periodButton).selected,
+      {DisplayPeriod.month},
+    );
+    expect(fake.stepsCalls.length, 37);
+    expect(find.text('今日 10/6(火)'), findsNWidgets(2));
+    await tester.scrollUntilVisible(
+      find.text('9/7(月)').first,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('9/7(月)'), findsWidgets);
+  });
+
+  testWidgets('20 切り替え中はローディングを表示し、7 日に戻せる', (tester) async {
+    seedData();
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    final gate = Completer<void>();
+    fake.readGate = gate;
+    await tester.tap(find.text('30 日'));
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(periodButton, findsNothing);
+    gate.complete();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('7 日'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SegmentedButton<DisplayPeriod>>(periodButton).selected,
+      {DisplayPeriod.week},
+    );
+    expect(find.text('9/30(水)'), findsNWidgets(2));
+    expect(fake.stepsCalls.length, 7 + 30 + 7);
+  });
+
+  testWidgets('21 30 日でデータなしの案内が出る', (tester) async {
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('30 日'));
+    await tester.pumpAndSettle();
+    expect(find.text('ヘルスコネクトにデータがありません'), findsOneWidget);
+    expect(
+      tester.getTopLeft(periodButton).dy,
+      lessThan(tester.getTopLeft(find.text('ヘルスコネクトにデータがありません')).dy),
+    );
+  });
+
+  testWidgets('22 30 日で歩数だけ未許可の案内が崩れない', (tester) async {
+    fake.permissions = (
+      steps: PermissionStatus.denied,
+      sleep: PermissionStatus.granted,
+    );
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('30 日'));
+    await tester.pumpAndSettle();
+    expect(find.text('歩数の権限が許可されていません'), findsOneWidget);
   });
 }

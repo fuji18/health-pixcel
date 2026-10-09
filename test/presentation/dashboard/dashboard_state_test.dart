@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:health_pixcel/domain/date_range_builder.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
+import 'package:health_pixcel/domain/models/display_period.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
@@ -34,7 +35,12 @@ void main() {
   DashboardReady ready(
     MetricResult<DailySteps> steps,
     MetricResult<DailySleep> sleep,
-  ) => DashboardReady(range: range, steps: steps, sleep: sleep);
+  ) => DashboardReady(
+    period: DisplayPeriod.week,
+    range: range,
+    steps: steps,
+    sleep: sleep,
+  );
 
   group('isAllEmpty', () {
     test('片方未許可 + 片方全日記録なし', () {
