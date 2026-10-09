@@ -100,6 +100,35 @@ void main() {
     );
   });
 
+  test('currentRange(dayCount: 30)', () {
+    final r = service.currentRange(dayCount: 30);
+    expect(r.days.length, 30);
+    expect(r.oldestDay, DateTime(2026, 9, 7));
+    expect(clockCalls, 1);
+  });
+
+  test('歩数: 30 日分', () async {
+    final result = await service.loadSteps(service.currentRange(dayCount: 30));
+    final days = (result as MetricLoaded<DailySteps>).days;
+    expect(days.length, 30);
+    expect(days[0].isToday, isTrue);
+    expect(days[29].date, DateTime(2026, 9, 7));
+    expect(fake.stepsCalls.length, 30);
+    expect(
+      fake.stepsCalls,
+      containsAll([
+        (DateTime(2026, 9, 7), DateTime(2026, 9, 8)),
+        (DateTime(2026, 10, 6), now),
+      ]),
+    );
+  });
+
+  test('睡眠: 30 日分の読み取り区間', () async {
+    final result = await service.loadSleep(service.currentRange(dayCount: 30));
+    expect((result as MetricLoaded<DailySleep>).days.length, 30);
+    expect(fake.sleepCalls, [(DateTime(2026, 9, 6), now)]);
+  });
+
   test('時計は 1 回しか読まれない', () async {
     final r = service.currentRange();
     await service.loadSteps(r);

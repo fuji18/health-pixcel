@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
+import 'package:health_pixcel/domain/models/display_period.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_controller.dart';
@@ -308,6 +310,157 @@ void main() {
         (v.sleep as MetricFailed<dynamic>).kind,
         HealthErrorKind.readFailed,
       );
+    });
+  });
+
+  group('表示期間', () {
+    DashboardReady ready() => value() as DashboardReady;
+
+    /// 以降に流れた AsyncData<DashboardReady> の period を記録する
+    List<DisplayPeriod> recordPeriods() {
+      final periods = <DisplayPeriod>[];
+      container.listen(dashboardControllerProvider, (_, next) {
+        final v = next.value;
+        if (next is AsyncData<DashboardState> && v is DashboardReady) {
+          periods.add(v.period);
+        }
+      });
+      return periods;
+    }
+
+    test('初期は 7 日', () async {
+      await initial();
+      expect(ready().period, DisplayPeriod.week);
+      expect(ready().range.days.length, 7);
+    });
+
+    test('30 日に切り替える', () async {
+      await initial();
+      fake.readGate = Completer<void>();
+      final f = controller().selectPeriod(DisplayPeriod.month);
+      await pump();
+      expect(st().isLoading, isTrue);
+      fake.readGate!.complete();
+      await f;
+      final v = ready();
+      expect(v.period, DisplayPeriod.month);
+      expect(v.range.days.length, 30);
+      expect((v.steps as MetricLoaded<DailySteps>).days.length, 30);
+      expect((v.sleep as MetricLoaded<DailySleep>).days.length, 30);
+      expect(fake.stepsCalls.length, 7 + 30);
+    });
+
+    test('同じ期間は読み直さない', () async {
+      await initial();
+      final before = fake.checkAvailabilityCalls;
+      await controller().selectPeriod(DisplayPeriod.week);
+      expect(fake.checkAvailabilityCalls, before);
+      expect(st().isLoading, isFalse);
+    });
+
+    test('切り替え後の refresh は期間を保つ', () async {
+      await initial();
+      await controller().selectPeriod(DisplayPeriod.month);
+      await controller().refresh();
+      expect(ready().period, DisplayPeriod.month);
+      expect(ready().range.days.length, 30);
+    });
+
+    test('30 日に戻して 7 日に戻す', () async {
+      await initial();
+      await controller().selectPeriod(DisplayPeriod.month);
+      await controller().selectPeriod(DisplayPeriod.week);
+      expect(ready().period, DisplayPeriod.week);
+      expect(ready().range.days.length, 7);
+    });
+
+    test('実行中の refresh があるときの切り替え', () async {
+      await initial();
+      fake.readGate = Completer<void>();
+      final before = fake.stepsCalls.length;
+      final r = controller().refresh();
+      await pump();
+      final periods = recordPeriods();
+      final s = controller().selectPeriod(DisplayPeriod.month);
+      await pump();
+      expect(
+        fake.stepsCalls.length,
+        greaterThan(before),
+        reason: '読み取りがゲートで止まっている',
+      );
+      fake.readGate!.complete();
+      await Future.wait([r, s]);
+      expect(ready().period, DisplayPeriod.month);
+      expect(ready().range.days.length, 30);
+      expect(periods, everyElement(DisplayPeriod.month));
+    });
+
+    test('連続切り替え', () async {
+      await initial();
+      fake.readGate = Completer<void>();
+      final before = fake.stepsCalls.length;
+      final a = controller().selectPeriod(DisplayPeriod.month);
+      await pump();
+      final periods = recordPeriods();
+      final b = controller().selectPeriod(DisplayPeriod.week);
+      await pump();
+      expect(
+        fake.stepsCalls.length,
+        greaterThan(before),
+        reason: '読み取りがゲートで止まっている',
+      );
+      fake.readGate!.complete();
+      await Future.wait([a, b]);
+      expect(ready().period, DisplayPeriod.week);
+      expect(ready().range.days.length, 7);
+      expect(periods, everyElement(DisplayPeriod.week));
+    });
+
+    test('権限リクエスト後の読み込み中の切り替え', () async {
+      await initial();
+      fake.requestGate = Completer<void>();
+      fake.readGate = Completer<void>();
+      final before = fake.stepsCalls.length;
+      final r = controller().requestPermissions();
+      await pump();
+      final periods = recordPeriods();
+      // リクエストが済み、7 日の読み込みがゲートで止まっている状態にしてから切り替える
+      fake.requestGate!.complete();
+      await pump();
+      expect(
+        fake.stepsCalls.length,
+        greaterThan(before),
+        reason: '読み取りがゲートで止まっている',
+      );
+      final s = controller().selectPeriod(DisplayPeriod.month);
+      await pump();
+      fake.readGate!.complete();
+      await Future.wait([r, s]);
+      expect(ready().period, DisplayPeriod.month);
+      expect(ready().range.days.length, 30);
+      expect(periods, everyElement(DisplayPeriod.month));
+    });
+
+    test('30 日で歩数の 1 日が失敗', () async {
+      await initial();
+      fake.stepsErrors[DateTime(2026, 9, 7)] = HealthErrorKind.readFailed;
+      await controller().selectPeriod(DisplayPeriod.month);
+      final v = ready();
+      expect(v.period, DisplayPeriod.month);
+      expect(v.steps, isA<MetricFailed<DailySteps>>());
+      expect((v.sleep as MetricLoaded<DailySleep>).days.length, 30);
+    });
+
+    test('30 日で想定外の例外', () async {
+      await initial();
+      await controller().selectPeriod(DisplayPeriod.month);
+      fake.permissionsError = Exception('x');
+      await controller().refresh();
+      final v = ready();
+      expect(v.period, DisplayPeriod.month);
+      expect(v.range.days.length, 30);
+      expect(v.steps, isA<MetricFailed<DailySteps>>());
+      expect(v.sleep, isA<MetricFailed<DailySleep>>());
     });
   });
 

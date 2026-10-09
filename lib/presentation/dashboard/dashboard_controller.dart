@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 import 'package:health_pixcel/domain/models/date_range.dart';
+import 'package:health_pixcel/domain/models/display_period.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
@@ -24,6 +25,7 @@ class DashboardController extends AsyncNotifier<DashboardState> {
   Future<DashboardState>? _inFlight;
   bool _requestingPermission = false;
   _Snapshot? _lastSnapshot;
+  DisplayPeriod _period = DisplayPeriod.week;
 
   @override
   Future<DashboardState> build() => _fetch();
@@ -31,7 +33,17 @@ class DashboardController extends AsyncNotifier<DashboardState> {
   /// 前回の値を表示したまま読み直す(引っぱって更新・「再読み込み」)。
   Future<void> refresh() async {
     final next = await _fetch();
-    if (!ref.mounted) return;
+    if (!ref.mounted || !_isCurrent(next)) return;
+    state = AsyncData(next);
+  }
+
+  /// 表示期間を切り替えて読み直す。同じ期間なら何もしない。
+  Future<void> selectPeriod(DisplayPeriod period) async {
+    if (period == _period) return;
+    _period = period;
+    state = const AsyncLoading<DashboardState>();
+    final next = await _fetch(force: true);
+    if (!ref.mounted || !_isCurrent(next)) return;
     state = AsyncData(next);
   }
 
@@ -50,7 +62,7 @@ class DashboardController extends AsyncNotifier<DashboardState> {
     if (!ref.mounted) return;
     state = const AsyncLoading<DashboardState>();
     final next = await _fetch(force: true);
-    if (!ref.mounted) return;
+    if (!ref.mounted || !_isCurrent(next)) return;
     state = AsyncData(next);
   }
 
@@ -109,9 +121,15 @@ class DashboardController extends AsyncNotifier<DashboardState> {
     return future;
   }
 
+  /// 読み込みの結果が今の表示期間のものか。期間に依存しない状態(利用不可・権限なし)は常に true。
+  /// 期間を変える前に始まった _fetch が後から完了しても、古い期間の結果で state を上書きしないための判定。
+  bool _isCurrent(DashboardState s) =>
+      s is! DashboardReady || s.period == _period;
+
   Future<DashboardState> _fetchBody() async {
     final repository = ref.read(healthRepositoryProvider);
     final service = ref.read(weeklySummaryServiceProvider);
+    final period = _period;
     DateRange? range;
     try {
       // 1. 利用可否
@@ -133,7 +151,7 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         return const DashboardNeedsPermission();
       }
       // 4. 許可済みの種別だけ並行に読む
-      final r = range = service.currentRange();
+      final r = range = service.currentRange(dayCount: period.dayCount);
       final (
         MetricResult<DailySteps> stepsResult,
         MetricResult<DailySleep> sleepResult,
@@ -166,12 +184,18 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         }
       }
       // 6.
-      return DashboardReady(range: r, steps: steps, sleep: sleep);
+      return DashboardReady(
+        period: period,
+        range: r,
+        steps: steps,
+        sleep: sleep,
+      );
     } catch (_) {
       // 7. 想定外の例外。値をログに出さない。次の復帰で必ず読み直すため snapshot を捨てる
       _lastSnapshot = null;
       return DashboardReady(
-        range: range ?? service.currentRange(),
+        period: period,
+        range: range ?? service.currentRange(dayCount: period.dayCount),
         steps: const MetricFailed<DailySteps>(HealthErrorKind.readFailed),
         sleep: const MetricFailed<DailySleep>(HealthErrorKind.readFailed),
       );

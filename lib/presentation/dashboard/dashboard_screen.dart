@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:health_pixcel/domain/models/display_period.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_controller.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
@@ -104,6 +105,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   List<Widget> _buildReady(DashboardReady state) {
     final today = state.range.today;
     return [
+      Semantics(
+        container: true,
+        label: '表示期間',
+        child: SegmentedButton<DisplayPeriod>(
+          segments: const [
+            ButtonSegment(value: DisplayPeriod.week, label: Text('7 日')),
+            ButtonSegment(value: DisplayPeriod.month, label: Text('30 日')),
+          ],
+          selected: {state.period},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) =>
+              _controller.selectPeriod(selection.single),
+        ),
+      ),
+      const SizedBox(height: 16),
       if (state.isAllEmpty) ...[
         StatusMessage(
           title: 'ヘルスコネクトにデータがありません',
