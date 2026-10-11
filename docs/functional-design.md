@@ -165,6 +165,7 @@ class Goals {
 
 - 範囲(両端を含む): 歩数 1,000〜100,000 歩 / 睡眠時間 180〜720 分(3〜12 時間)。範囲と入力の解析は `lib/domain/goal_input.dart` が持つ
 - `toString()` は実装しない(プライバシー検査)
+- 日別の達成判定は `lib/domain/goal_progress.dart` が持つ(A5)
 
 ### エンティティ: DashboardState(画面状態)
 
@@ -405,10 +406,11 @@ typedef _Snapshot = ({
 
 | コンポーネント | 責務 |
 |---|---|
-| `DashboardScreen` | 唯一の画面。`DashboardState` に応じて以下を出し分ける。`DashboardReady` のときだけリスト先頭に期間の切り替え(`SegmentedButton<DisplayPeriod>`。「7 日」「30 日」)を置く |
-| `StepsSection` | `MetricResult<DailySteps>` を受け取り、推移グラフ(`TrendBarChart`)と期間の日数分(7 / 30 行)の一覧・未許可案内・エラー表示のいずれかを描画 |
-| `SleepSection` | `MetricResult<DailySleep>` を受け取り、同上 |
-| `TrendBarChart` | 日別の値を棒グラフで描く。記録なしの日は棒も下地も描かない。全日記録なしなら代替文言。グラフ全体の要約を Semantics で読ませる |
+| `DashboardScreen` | 唯一の画面。`DashboardState` に応じて以下を出し分ける。`DashboardReady` のときだけリスト先頭に期間の切り替え(`SegmentedButton<DisplayPeriod>`。「7 日」「30 日」)を置く。`goalsControllerProvider` を watch して目標値を各セクションへ渡す(読み込み中・失敗は目標なし扱い)。目標を保存すると `GoalsController` の状態が置き換わり、ヘルスコネクトを読み直さずに即座に再描画される |
+| `StepsSection` | `MetricResult<DailySteps>` と歩数の目標(`int?`)を受け取り、推移グラフ(`TrendBarChart`)と期間の日数分(7 / 30 行)の一覧・未許可案内・エラー表示のいずれかを描画。目標があれば見出しの下に「目標 8,000 歩」、グラフに目標ライン、各行に `GoalMark` を出す |
+| `SleepSection` | `MetricResult<DailySleep>` と睡眠時間の目標(分。`int?`)を受け取り、同上(「目標 7時間30分」) |
+| `TrendBarChart` | 日別の値を棒グラフで描く。記録なしの日は棒も下地も描かない。全日記録なしなら代替文言。グラフ全体の要約を Semantics で読ませる。`goalY` があれば目標ラインを引く |
+| `GoalMark` | 一覧の行末の達成マーク(A5 の `GoalStatus` を表示)。目標が設定されているときだけ置き、判定しない日は同じ幅の空白にして値の列を揃える |
 | `StatusMessage` | 案内・エラーの共通表示(見出し + 説明 + 操作ボタン) |
 | `GoalSettingsScreen` | 目標値の設定画面。歩数(1,000〜100,000 歩)と睡眠時間(時間 3〜12・分 0〜59、合計 3 時間〜12 時間)の数値入力欄。空欄で保存すると目標なし。不正な入力は入力欄の下に理由(「数字で入力してください」等)を出して保存しない。保存成功で SnackBar「目標を保存しました」を出して閉じ、失敗は「保存できませんでした」を出して留まる |
 | `PermissionRationaleScreen` | 権限の利用目的の説明画面(ヘルスコネクトから「利用目的」を開いたときの表示先。案内画面の「詳しく見る」からも開く) |
@@ -597,6 +599,22 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 - `intl` の `ja` ロケールの日付データは、`main()` で `runApp` の前に `await initializeDateFormatting('ja')` を呼んで読み込む。テストでは `setUpAll` で同じ呼び出しを行う
 - テストの期待値の曜日は、実際の暦どおりに書く(2026-10-04 = 日、10-05 = 月、10-06 = 火)
 
+### A5. 目標の達成判定
+
+`lib/domain/goal_progress.dart` の `stepsGoalStatus(day, goal:)` / `sleepGoalStatus(day, goalMinutes:)` が日ごとに `GoalStatus` を返す。上から順に最初に当たったものになる。
+
+| 条件 | 歩数 | 睡眠 |
+|---|---|---|
+| 目標が null | `notSet` | `notSet` |
+| 記録なし | `noRecord` | `noRecord` |
+| 値 ≧ 目標(**目標ちょうどは達成**) | `achieved` | `achieved` |
+| 今日の途中値で目標未満 | `inProgress`(判定しない) | ―(今日も通常どおり判定) |
+| それ以外 | `notAchieved` | `notAchieved` |
+
+- 睡眠は日別合計の分(`total.inMinutes`。秒は切り捨てで、A4 の表示と同じ)を比べる
+- 今日の歩数は途中値のため、目標に届いていれば達成とし、届いていなければまだ判定しない。睡眠は起床日に帰属し、表示時点でその夜の睡眠は終わっているため今日も判定する
+- 達成数・達成率の集計はしない(P2「週次の振り返りサマリー」)
+
 ## UI設計
 
 ### 画面レイアウト(DashboardReady)
@@ -636,6 +654,7 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 | 日付 | 帰属日(起床日) | A4 の日付形式 |
 | 就寝→起床 | 各セッションの開始・終了 | `HH:mm→HH:mm` |
 | 睡眠時間 | 日別合計(複数セッション時) | A4 の時間形式 |
+| 達成マーク | 目標があるときだけ。A5 の判定 | 「達成」/「未達」(下記) |
 
 **歩数セクション(1 日 1 行)**
 
@@ -643,6 +662,18 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 |------|------|-------------|
 | 日付 | 対象日 | A4 の日付形式 |
 | 歩数 | 日別合計。今日は「(途中)」を付ける | A4 の歩数形式 |
+| 達成マーク | 目標があるときだけ。A5 の判定 | 「達成」/「未達」(下記) |
+
+**目標の表示**: 目標が設定されているとき、各セクションの見出しの下に「目標 8,000 歩」/「目標 7時間30分」を出す。目標が未設定なら目標の表示・達成マーク・目標ラインのいずれも出さない。
+
+| `GoalStatus` | 行末の表示 |
+|---|---|
+| `achieved` | チェックのアイコン + 「達成」 |
+| `notAchieved` | 円にマイナスのアイコン + 「未達」 |
+| `noRecord` / `inProgress` | 何も出さない(「記録なし」「(途中)」の表示で区別できる) |
+| `notSet` | 何も出さない(マークの欄自体を置かない) |
+
+- 読み上げは行全体を 1 つにまとめ、「今日 10/6(火) 3,210 歩 達成」のように文言で伝える(アイコンは読ませない)
 
 ### 推移グラフ(睡眠・歩数共通)
 
@@ -650,10 +681,12 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 - 縦軸 = 歩数(2,000 歩単位で切り上げ、最小 2,000)/ 睡眠時間(2 時間単位で切り上げ、最小 2 時間)。中間線と上限の 2 か所にラベルを付ける
 - 記録なしの日は棒も下地も描かない。値 0 の日は下地があるので記録なしと見分けられる
 - 全日記録なしのときはグラフを描かず「この期間の記録はありません」を表示する
+- 目標があるときは、目標値の高さに破線の水平線を引き、右上に「目標」と添える。縦軸の上限は目標値より 1 段上に切り上げる(目標が棒より高くても、上限と同じ値でも、ラインと「目標」の文字が枠内に収まる。例: 目標 8,000 歩 → 上限 10,000 歩)
 - スクリーンリーダーにはグラフ全体の要約を読ませる(棒ごとには読ませない。日別の値は下の一覧で読める)
   - 歩数あり: `歩数の推移グラフ。直近 N 日のうち記録のある日 K 日、1 日平均 X 歩、最多 Y 歩`
   - 睡眠あり: `睡眠時間の推移グラフ。直近 N 日のうち記録のある日 K 日、1 日平均 X、最長 Y`
   - 記録なし: `歩数の推移グラフ。直近 N 日、記録はありません` / `睡眠時間の推移グラフ。直近 N 日、記録はありません`
+  - 目標があるとき(記録ありの場合のみ)、末尾に `、目標 X 歩` / `、目標 X` を足す
 
 ### 状態別の表示
 
@@ -675,6 +708,8 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 - 「記録なし」「(途中)」は本文より弱い色(`onSurfaceVariant` 相当)で表示し、値のある行と区別する
 - エラー・案内は `docs/ui-design-guidelines.md` の基準に従い、色だけに頼らず文言で状態を伝える
 - 推移グラフの棒は `primary`、記録のある日の下地は `surfaceContainerHighest`、補助線は `outlineVariant`。記録の有無は下地の有無(形)で区別する
+- 目標ラインは `onSurface` の破線(補助線の実線と線種で区別する)
+- 達成マークのアイコンは `primary`、未達は文言・アイコンとも `onSurfaceVariant`。未達は異常ではないためエラー色を使わない。達成・未達はアイコンの形と文言で区別し、色だけに頼らない
 - 具体的な配色は `docs/ui-design-guidelines.md` §7 の記入(`/kickoff` フェーズ1.5)に従う
 
 ## ファイル構造
@@ -726,11 +761,13 @@ MVP では健康データをファイル・データベースに保存しない�
 - `DashboardController` の追加ケース: 利用不可で終わった `_fetch()` の後、更新して復帰 → 再読み込みされる / 権限なしで終わった後、何も変えずに復帰 → 再読み込みされない / 実行中の `refresh()` があるときの `requestPermissions()` → 許可後の権限状態で表示される / `requestPermissions()` が例外 → `_requestingPermission` が `false` に戻る
 - `HealthPixcelApp`: 起動時のルート名(`defaultRouteNameTestValue`)が `/permission-rationale` → `PermissionRationaleScreen`、`/` や未知の値 → `DashboardScreen` が最初のフレームから表示される
 - `PermissionRationaleScreen`: 本文の箇条書きが表示され、「詳しく見る」から開いた場合に「閉じる」で元の画面に戻る
+- A5 の達成判定: 目標ちょうど(境界)・目標 ±1・今日の途中値(目標未満 / 以上)・記録なし・目標なし・睡眠の秒切り捨て
 
 ### ウィジェットテスト(`flutter test`)
 - `DashboardScreen` が各 `DashboardState` で「状態別の表示」の文言と操作ボタンを出す
 - `Ready` で 7 行ずつ表示され、記録なしの日も行が省略されない
-- 推移グラフ(データあり / 一部記録なし / 全日記録なし / 30 日)
+- 推移グラフ(データあり / 一部記録なし / 全日記録なし / 30 日 / 目標ラインの有無)
+- 目標の表示(目標なしで何も出ない / 達成・未達・途中・記録なしの出し分け / 目標を保存すると即座に反映される)
 
 ### 実機確認(Pixel 10、手動)
 - 初回起動 → 権限許可 → 再起動なしで表示(F1)
