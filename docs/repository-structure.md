@@ -45,9 +45,11 @@ lib/domain/
 │   ├── sleep_session.dart        # SleepSession
 │   ├── daily_sleep.dart          # DailySleep
 │   ├── metric_result.dart        # MetricResult / MetricLoaded / MetricPermissionDenied / MetricFailed
+│   ├── goals.dart                # Goals(目標値)
 │   └── health_status.dart        # PermissionStatus / HealthAvailability / HealthErrorKind / LaunchAction
 ├── date_range_builder.dart       # buildDateRange / nextDay(機能設計書 A1)
 ├── sleep_assignment.dart         # assignSleepToDays(A3)
+├── goal_input.dart               # 目標値の範囲・入力の解析と検証(parseStepsGoal / parseSleepGoal)
 ├── trend_summary.dart            # 推移グラフの読み上げ要約・縦軸上限
 └── formatters.dart               # 日付・歩数・時刻・時間のフォーマット(A4)
 ```
@@ -79,6 +81,8 @@ lib/application/
 lib/data/
 ├── health_repository.dart            # HealthRepository(抽象)/ HealthReadException
 ├── health_connect_repository.dart    # HealthConnectRepository(health パッケージで実装)
+├── goal_repository.dart              # GoalRepository(抽象)/ GoalStorageException
+├── shared_preferences_goal_repository.dart  # 目標値を shared_preferences に保存
 └── platform_channels.dart            # health_pixcel/health_connect_settings のラッパー
 ```
 
@@ -94,7 +98,7 @@ lib/data/
 **配置ファイル**:
 ```
 lib/presentation/
-├── providers.dart                    # clockProvider / healthRepositoryProvider / weeklySummaryServiceProvider / launchActionProvider
+├── providers.dart                    # clockProvider / healthRepositoryProvider / goalRepositoryProvider / weeklySummaryServiceProvider / launchActionProvider
 ├── dashboard/
 │   ├── dashboard_state.dart          # DashboardState と各サブクラス
 │   ├── dashboard_controller.dart     # DashboardController(AsyncNotifier)と dashboardControllerProvider
@@ -104,6 +108,9 @@ lib/presentation/
 │       ├── steps_section.dart        # StepsSection
 │       ├── status_message.dart       # StatusMessage(案内・エラーの共通表示)
 │       └── trend_bar_chart.dart      # TrendBarChart
+├── goals/
+│   ├── goals_controller.dart         # GoalsController と goalsControllerProvider
+│   └── goal_settings_screen.dart     # GoalSettingsScreen
 └── rationale/
     └── permission_rationale_screen.dart  # PermissionRationaleScreen
 ```
@@ -228,7 +235,7 @@ scripts/
   - `lib/domain/` が `application/` `data/` `presentation/` を import しない
   - `lib/application/` が `presentation/` を import しない
   - `lib/data/` が `application/` `presentation/` を import しない
-  - `health_connect_repository.dart` と `platform_channels.dart` の import が `lib/data/` と `lib/presentation/providers.dart` 以外に出現しない
+  - `health_connect_repository.dart` と `platform_channels.dart` と `shared_preferences_goal_repository.dart` の import が `lib/data/` と `lib/presentation/providers.dart` 以外に出現しない
 - 相対 import(`import '../` / `import './`)が `lib/` に出現しない(`always_use_package_imports` と二重に検査する)
 
 **`check-privacy.sh` の仕様**(`lib/` を `grep` で検査。違反があれば該当行を出して `exit 1`):
@@ -236,7 +243,7 @@ scripts/
 - ファイル・入出力: `dart:io`(`lib/data/` の MethodChannel 実装でも使わない)/ `path_provider`
 - 共有・クリップボード: `Clipboard` / `share_plus` / `Share.`
 - 通信: `package:http/` / `package:dio/` / `HttpClient` / `WebSocket`
-- 保存: `package:shared_preferences/` / `package:sqflite/` / `package:hive` / `package:isar`(MVP は保存しない。P1 で保存を導入するときにこの検査を見直す)
+- 保存: `package:shared_preferences/` / `package:sqflite/` / `package:hive` / `package:isar`(P1 の目標値の保存は `shared_preferences_goal_repository.dart` の import 行だけ allow で除外する)
 - ロガー: `package:logging/` / `package:logger/`
 - `toString()` の実装: `lib/domain/` 内の `String toString()`
 - 例外: どうしても必要な行は行末に `// privacy-check: allow(<理由>)` を書くと除外される。使ったら PR 本文で理由を説明する
@@ -333,7 +340,7 @@ presentation ──→ application ──→ domain
 | 既存画面への項目追加 | 既存ファイルに追加 | 歩数セクションに目標値の表示を追加 |
 | 新しい画面 | `lib/presentation/<機能>/` を新設 | P1 のグラフ画面 → `lib/presentation/trends/` |
 | 新しいデータ型 | `lib/domain/models/` にモデル追加 + `HealthRepository` にメソッド追加 | P1 の心拍 → `daily_heart_rate.dart` |
-| 保存データの導入 | `lib/data/` に `*_store.dart` を追加(方式は P1 着手時に `architecture.md` で決める) | P1 の目標設定 |
+| 保存データの導入 | `lib/data/` に `goal_repository.dart`(抽象)+ `shared_preferences_goal_repository.dart`(実装)を追加 | P1 の目標設定 |
 | iOS 対応 | `lib/data/apple_health_repository.dart` + `ios/` | P2 |
 
 ### ファイルサイズの管理
