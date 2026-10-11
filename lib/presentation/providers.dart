@@ -1,8 +1,10 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health_pixcel/application/weekly_summary_service.dart';
+import 'package:health_pixcel/data/goal_repository.dart';
 import 'package:health_pixcel/data/health_connect_repository.dart';
 import 'package:health_pixcel/data/health_repository.dart';
+import 'package:health_pixcel/data/shared_preferences_goal_repository.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 
 /// 現在時刻。テストで固定値に差し替える。
@@ -11,6 +13,11 @@ final clockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 /// ヘルスデータへのアクセス。テストでフェイクに差し替える。
 final healthRepositoryProvider = Provider<HealthRepository>(
   (ref) => HealthConnectRepository(),
+);
+
+/// 目標値の保存先。テストでフェイクに差し替える。
+final goalRepositoryProvider = Provider<GoalRepository>(
+  (ref) => SharedPreferencesGoalRepository(),
 );
 
 /// 直近 7 日の組み立て。

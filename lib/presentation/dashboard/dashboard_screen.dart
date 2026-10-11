@@ -7,6 +7,7 @@ import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/sleep_section.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/status_message.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/steps_section.dart';
+import 'package:health_pixcel/presentation/goals/goal_settings_screen.dart';
 import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
 
 /// 唯一の画面。DashboardState に応じて表示を出し分ける。
@@ -39,7 +40,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(dashboardControllerProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('health-pixcel')),
+      appBar: AppBar(
+        title: const Text('health-pixcel'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.flag_outlined),
+            tooltip: '目標の設定',
+            onPressed: _openGoalSettings,
+          ),
+        ],
+      ),
       body: _buildBody(async),
     );
   }
@@ -149,6 +159,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void _retry() => _controller.refresh();
 
   void _requestPermissions() => _controller.requestPermissions();
+
+  void _openGoalSettings() => Navigator.of(
+    context,
+  ).push(MaterialPageRoute<void>(builder: (_) => const GoalSettingsScreen()));
 
   void _openRationale() => Navigator.of(context).push(
     MaterialPageRoute<void>(builder: (_) => const PermissionRationaleScreen()),

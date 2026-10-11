@@ -13,10 +13,12 @@ import 'package:health_pixcel/presentation/dashboard/dashboard_screen.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/sleep_section.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/steps_section.dart';
+import 'package:health_pixcel/presentation/goals/goal_settings_screen.dart';
 import 'package:health_pixcel/presentation/providers.dart';
 import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import '../../fakes/fake_goal_repository.dart';
 import '../../fakes/fake_health_repository.dart';
 
 class _FailingController extends DashboardController {
@@ -454,5 +456,19 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('25 旗アイコンで目標の設定画面が開く', (tester) async {
+    seedData();
+    await pumpScreen(
+      tester,
+      overrides: [
+        goalRepositoryProvider.overrideWithValue(FakeGoalRepository()),
+      ],
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('目標の設定'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GoalSettingsScreen), findsOneWidget);
   });
 }
