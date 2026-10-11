@@ -38,11 +38,16 @@ fi
 # --- ハーネスの自壊検知: hook スクリプトの実行権限が落ちていないか ---
 # PreToolUse hook は実行失敗時にフェイルオープン(素通り)になるため、ここで警告する。
 # lib-*.sh は source 専用の共有ライブラリ(#45)なので要件が逆になる(非実行が正)。
+# core.fileMode=false(WSL / Windows マウント経由の devcontainer 等)では、ディスクの
+# 実行ビットは git に入らず、マウント次第では外せもしない(drvfs で root 所有・777。#28)。
+# lib-*.sh の「付いていてはいけない」はその環境では意味を持たないので、下の index 検査だけを正とする。
+# 非 lib の「付いていなければならない」はディスクが正(hook が実際に起動できるか)なので常に見る。
+FILEMODE="$(git config --type=bool --get core.fileMode 2>/dev/null || echo true)"
 for s in .claude/scripts/*.sh .claude/hooks/*.sh; do
   [ -f "$s" ] || continue
   case "$(basename "$s")" in
     lib-*.sh)
-      if [ -x "$s" ]; then
+      if [ "$FILEMODE" != "false" ] && [ -x "$s" ]; then
         echo "⚠️ source 専用ライブラリに実行権限が付いている: $s(git update-index --chmod=-x で外すこと。CI の harness-integrity が落ちる)"
       fi
       ;;

@@ -1,6 +1,7 @@
 {
   "name": "health-pixcel",
   "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+  "remoteUser": "vscode",
   "features": {
     "ghcr.io/devcontainers/features/node:2": {
       "version": "24"
@@ -11,7 +12,7 @@
     "LOCAL_GH_TOKEN": "${localEnv:GH_TOKEN}"
   },
   "remoteEnv": {
-    "PATH": "${containerEnv:HOME}/flutter/bin:${containerEnv:PATH}"
+    "PATH": "/home/vscode/flutter/bin:${containerEnv:PATH}"
   },
   "customizations": {
     "vscode": {
