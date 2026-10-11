@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:health_pixcel/domain/formatters.dart';
+import 'package:health_pixcel/domain/goal_progress.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/domain/trend_summary.dart';
+import 'package:health_pixcel/presentation/dashboard/widgets/goal_mark.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/status_message.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/trend_bar_chart.dart';
 
@@ -12,6 +14,7 @@ class SleepSection extends StatelessWidget {
     super.key,
     required this.result,
     required this.today,
+    required this.goalMinutes,
     required this.onRequestPermission,
     required this.onOpenSettings,
     required this.onRetry,
@@ -22,6 +25,9 @@ class SleepSection extends StatelessWidget {
 
   /// 今日(「今日」「昨日」の判定)。
   final DateTime today;
+
+  /// 1 日の睡眠時間の目標(分)。null は目標なし。
+  final int? goalMinutes;
 
   /// 「権限を許可する」の処理。
   final VoidCallback onRequestPermission;
@@ -34,7 +40,9 @@ class SleepSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final goalMinutes = this.goalMinutes;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -48,20 +56,38 @@ class SleepSection extends StatelessWidget {
           MetricLoaded<DailySleep>(:final days) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (goalMinutes != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '目標 ${formatDuration(Duration(minutes: goalMinutes))}',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               TrendBarChart(
                 dates: [for (final d in days.reversed) d.date],
                 values: [
                   for (final d in days.reversed)
                     d.hasRecord ? d.total.inMinutes / 60 : null,
                 ],
-                maxY: sleepAxisMaxHours(
-                  days.where((d) => d.hasRecord).map((d) => d.total),
-                ),
+                maxY: sleepAxisMaxHours([
+                  ...days.where((d) => d.hasRecord).map((d) => d.total),
+                  if (goalMinutes != null) Duration(minutes: goalMinutes + 1),
+                ]),
                 axisLabel: (v) => '${v.round()}時間',
-                semanticsLabel: sleepTrendSummary(days),
+                semanticsLabel: sleepTrendSummary(
+                  days,
+                  goalMinutes: goalMinutes,
+                ),
+                goalY: goalMinutes == null ? null : goalMinutes / 60,
               ),
               const SizedBox(height: 16),
-              for (final day in days) _SleepRow(day: day, today: today),
+              for (final day in days)
+                _SleepRow(day: day, today: today, goalMinutes: goalMinutes),
             ],
           ),
           MetricPermissionDenied<DailySleep>() => StatusMessage(
@@ -82,10 +108,15 @@ class SleepSection extends StatelessWidget {
 }
 
 class _SleepRow extends StatelessWidget {
-  const _SleepRow({required this.day, required this.today});
+  const _SleepRow({
+    required this.day,
+    required this.today,
+    required this.goalMinutes,
+  });
 
   final DailySleep day;
   final DateTime today;
+  final int? goalMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +150,10 @@ class _SleepRow extends StatelessWidget {
               ),
               const SizedBox(width: 16),
               Text(formatDuration(day.total), style: numeric),
+            ],
+            if (goalMinutes != null) ...[
+              const SizedBox(width: 8),
+              GoalMark(status: sleepGoalStatus(day, goalMinutes: goalMinutes)),
             ],
           ],
         ),

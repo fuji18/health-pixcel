@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:health_pixcel/domain/formatters.dart';
+import 'package:health_pixcel/domain/goal_progress.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/domain/trend_summary.dart';
+import 'package:health_pixcel/presentation/dashboard/widgets/goal_mark.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/status_message.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/trend_bar_chart.dart';
 
@@ -12,6 +14,7 @@ class StepsSection extends StatelessWidget {
     super.key,
     required this.result,
     required this.today,
+    required this.goal,
     required this.onRequestPermission,
     required this.onOpenSettings,
     required this.onRetry,
@@ -22,6 +25,9 @@ class StepsSection extends StatelessWidget {
 
   /// 今日(「今日」「昨日」の判定)。
   final DateTime today;
+
+  /// 1 日の歩数の目標。null は目標なし。
+  final int? goal;
 
   /// 「権限を許可する」の処理。
   final VoidCallback onRequestPermission;
@@ -34,7 +40,9 @@ class StepsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final goal = this.goal;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -48,15 +56,32 @@ class StepsSection extends StatelessWidget {
           MetricLoaded<DailySteps>(:final days) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (goal != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '目標 ${formatSteps(goal)}',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               TrendBarChart(
                 dates: [for (final d in days.reversed) d.date],
                 values: [for (final d in days.reversed) d.steps?.toDouble()],
-                maxY: stepsAxisMax(days.map((d) => d.steps).whereType<int>()),
+                maxY: stepsAxisMax([
+                  ...days.map((d) => d.steps).whereType<int>(),
+                  if (goal != null) goal + 1,
+                ]),
                 axisLabel: (v) => formatNumber(v.round()),
-                semanticsLabel: stepsTrendSummary(days),
+                semanticsLabel: stepsTrendSummary(days, goal: goal),
+                goalY: goal?.toDouble(),
               ),
               const SizedBox(height: 16),
-              for (final day in days) _StepsRow(day: day, today: today),
+              for (final day in days)
+                _StepsRow(day: day, today: today, goal: goal),
             ],
           ),
           MetricPermissionDenied<DailySteps>() => StatusMessage(
@@ -77,10 +102,11 @@ class StepsSection extends StatelessWidget {
 }
 
 class _StepsRow extends StatelessWidget {
-  const _StepsRow({required this.day, required this.today});
+  const _StepsRow({required this.day, required this.today, required this.goal});
 
   final DailySteps day;
   final DateTime today;
+  final int? goal;
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +133,10 @@ class _StepsRow extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text('(途中)', style: muted),
               ],
+            ],
+            if (goal != null) ...[
+              const SizedBox(width: 8),
+              GoalMark(status: stepsGoalStatus(day, goal: goal)),
             ],
           ],
         ),

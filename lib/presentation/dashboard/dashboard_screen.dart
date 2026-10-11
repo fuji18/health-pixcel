@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health_pixcel/domain/models/display_period.dart';
+import 'package:health_pixcel/domain/models/goals.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_controller.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
@@ -8,6 +9,7 @@ import 'package:health_pixcel/presentation/dashboard/widgets/sleep_section.dart'
 import 'package:health_pixcel/presentation/dashboard/widgets/status_message.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/steps_section.dart';
 import 'package:health_pixcel/presentation/goals/goal_settings_screen.dart';
+import 'package:health_pixcel/presentation/goals/goals_controller.dart';
 import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
 
 /// 唯一の画面。DashboardState に応じて表示を出し分ける。
@@ -39,6 +41,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(dashboardControllerProvider);
+    final goals = ref.watch(goalsControllerProvider).value ?? const Goals();
     return Scaffold(
       appBar: AppBar(
         title: const Text('health-pixcel'),
@@ -50,11 +53,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ],
       ),
-      body: _buildBody(async),
+      body: _buildBody(async, goals),
     );
   }
 
-  Widget _buildBody(AsyncValue<DashboardState> async) {
+  Widget _buildBody(AsyncValue<DashboardState> async, Goals goals) {
     if (async.isLoading) {
       return const Center(
         child: CircularProgressIndicator(semanticsLabel: '読み込み中'),
@@ -69,7 +72,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
       ];
     } else {
-      children = _buildChildren(async.requireValue);
+      children = _buildChildren(async.requireValue, goals);
     }
     return RefreshIndicator(
       onRefresh: () => _controller.refresh(),
@@ -81,7 +84,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  List<Widget> _buildChildren(DashboardState state) {
+  List<Widget> _buildChildren(DashboardState state, Goals goals) {
     return switch (state) {
       DashboardUnavailable(:final availability) => [
         switch (availability) {
@@ -108,11 +111,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
       ],
-      DashboardReady() => _buildReady(state),
+      DashboardReady() => _buildReady(state, goals),
     };
   }
 
-  List<Widget> _buildReady(DashboardReady state) {
+  List<Widget> _buildReady(DashboardReady state, Goals goals) {
     final today = state.range.today;
     return [
       Semantics(
@@ -141,6 +144,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       SleepSection(
         result: state.sleep,
         today: today,
+        goalMinutes: goals.sleepMinutes,
         onRequestPermission: _requestPermissions,
         onOpenSettings: _openSettings,
         onRetry: _retry,
@@ -149,6 +153,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       StepsSection(
         result: state.steps,
         today: today,
+        goal: goals.steps,
         onRequestPermission: _requestPermissions,
         onOpenSettings: _openSettings,
         onRetry: _retry,

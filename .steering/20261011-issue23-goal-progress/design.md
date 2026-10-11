@@ -231,3 +231,36 @@ class GoalMark extends StatelessWidget {
 - 健康データの値・目標値をログに出さない
 - 余白は 4 の倍数(上記の値はすべて満たす)。新しい色トークンを足さない
 - 依存の追加なし
+
+## 検収指摘の反映(code-reviewer。司令塔の判断済み)
+
+### R1. `GoalMark` の幅を「固定」から「最小幅」にする
+
+文字サイズを大きくすると「達成」が 56px に収まらず、行がはみ出す。
+
+- `SizedBox(width: GoalMark.width, ...)` を `ConstrainedBox(constraints: const BoxConstraints(minWidth: GoalMark.width), child: ...)` に替える
+- 中身が空になる状態(`noRecord` / `inProgress` / `notSet`)は `const SizedBox(width: GoalMark.width)` のまま(空白で値の列を揃える)
+- `achieved` / `notAchieved` の `Row` は `mainAxisSize: MainAxisSize.min` にする
+- テストを追加する(`dashboard_screen_test.dart`): `tester.platformDispatcher.textScaleFactorTestValue = 2.0`(`addTearDown` で `clearTextScaleFactorTestValue`)と `Goals(steps: 8000)` で表示し、`tester.takeException()` が null であることを確かめる(オーバーフローが無いこと)
+
+### R2. 目標が縦軸の上限と同じ値でもラベルが欠けないようにする
+
+目標が軸の上限ちょうど(例: 8,000 歩 → 上限 8,000)だと、線が枠の上端に乗る。`topRight` の「目標」ラベルが枠の外に出て、欠ける。
+
+- 縦軸上限の計算に渡す目標値を **+1** する(上限が必ず目標より 1 段上に切り上がる)
+  - 歩数: `stepsAxisMax([...値, if (goal != null) goal + 1])`(`?goal` の書き方は `goal == null ? null : goal + 1` 等に合わせて変えてよい)
+  - 睡眠: `if (goalMinutes != null) Duration(minutes: goalMinutes + 1)`
+- 例: 目標 8,000 歩 → 上限 10,000。目標 7時間30分 → 上限 8 時間。目標 10 時間 → 上限 12 時間
+- テスト: `dashboard_screen_test.dart` の目標ラインのケースで、歩数グラフの `BarChart.data.maxY` が目標値より大きいことを確かめる(目標 8000 → `maxY == 10000`)。既存テストの期待値がこの変更で変わる場合は合わせる
+
+### R3. 読み上げテストで、どの行に「達成」が付いたかを確かめる
+
+`find.bySemanticsLabel(RegExp('達成'))` が 1 件以上あるだけでは、どの行に付いたかが分からない。
+
+- 次の形に締める: `find.bySemanticsLabel(RegExp('10/5.*8,432 歩.*達成'))` が `findsOneWidget`
+- 今日の行(3,210 歩・途中)の読み上げに「達成」「未達」が含まれないことも確かめる: `find.bySemanticsLabel(RegExp('10/6.*(達成|未達)'))` が `findsNothing`
+- 実際のラベルの区切り(改行か空白か)はテストで確認し、正規表現を合わせる(`.*` を `[\s\S]*` にする等)
+
+### docs 側
+
+`docs/functional-design.md` の R2 の記述(「縦軸の上限は目標値より 1 段上に切り上げる」)は司令塔が直す。実装者は触らない。

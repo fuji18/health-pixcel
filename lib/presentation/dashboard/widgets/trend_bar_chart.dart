@@ -11,6 +11,7 @@ class TrendBarChart extends StatelessWidget {
     required this.maxY,
     required this.axisLabel,
     required this.semanticsLabel,
+    this.goalY,
   });
 
   /// 各棒の日付。古い順(左が古い)。
@@ -28,6 +29,9 @@ class TrendBarChart extends StatelessWidget {
   /// スクリーンリーダー向けの要約。
   final String semanticsLabel;
 
+  /// 目標ラインの値。null なら引かない。
+  final double? goalY;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -38,6 +42,7 @@ class TrendBarChart extends StatelessWidget {
     );
     final n = values.length;
     final width = n <= 7 ? 16.0 : 6.0;
+    final goal = goalY;
 
     Widget bottomTitle(double value, TitleMeta meta) {
       final i = value.toInt();
@@ -118,6 +123,27 @@ class TrendBarChart extends StatelessWidget {
                   ),
                 ),
               ),
+              extraLinesData: goal == null
+                  ? const ExtraLinesData()
+                  : ExtraLinesData(
+                      horizontalLines: [
+                        HorizontalLine(
+                          y: goal,
+                          color: colorScheme.onSurface,
+                          strokeWidth: 1.5,
+                          dashArray: const [4, 4],
+                          label: HorizontalLineLabel(
+                            show: true,
+                            alignment: Alignment.topRight,
+                            padding: const EdgeInsets.only(right: 4, bottom: 4),
+                            style: labelStyle?.copyWith(
+                              color: colorScheme.onSurface,
+                            ),
+                            labelResolver: (_) => '目標',
+                          ),
+                        ),
+                      ],
+                    ),
               barGroups: [
                 for (var i = 0; i < n; i++)
                   BarChartGroupData(x: i, barRods: [rod(i)]),

@@ -7,6 +7,7 @@ import 'package:health_pixcel/presentation/providers.dart';
 import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'fakes/fake_goal_repository.dart';
 import 'fakes/fake_health_repository.dart';
 
 void main() {
@@ -17,6 +18,7 @@ void main() {
       ProviderScope(
         overrides: [
           healthRepositoryProvider.overrideWithValue(FakeHealthRepository()),
+          goalRepositoryProvider.overrideWithValue(FakeGoalRepository()),
           clockProvider.overrideWithValue(() => DateTime(2026, 10, 6, 10, 30)),
         ],
         child: const HealthPixcelApp(),
@@ -44,6 +46,7 @@ void main() {
       ProviderScope(
         overrides: [
           healthRepositoryProvider.overrideWithValue(fake),
+          goalRepositoryProvider.overrideWithValue(FakeGoalRepository()),
           clockProvider.overrideWithValue(() => DateTime(2026, 10, 6, 10, 30)),
         ],
         child: const HealthPixcelApp(),
@@ -76,6 +79,7 @@ void main() {
       ProviderScope(
         overrides: [
           healthRepositoryProvider.overrideWithValue(FakeHealthRepository()),
+          goalRepositoryProvider.overrideWithValue(FakeGoalRepository()),
           clockProvider.overrideWithValue(() => DateTime(2026, 10, 6, 10, 30)),
         ],
         child: const HealthPixcelApp(),
