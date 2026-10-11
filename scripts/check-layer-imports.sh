@@ -55,7 +55,7 @@ check_rule 'lib/application/ は Flutter / Riverpod に依存できません' li
 check_rule 'lib/domain/ は他の層を import できません' lib/domain '' 'package:health_pixcel/(application|data|presentation)/'
 check_rule 'lib/application/ は presentation/ を import できません' lib/application '' 'package:health_pixcel/presentation/'
 check_rule 'lib/data/ は application/ / presentation/ を import できません' lib/data '' 'package:health_pixcel/(application|presentation)/'
-check_rule 'health_connect_repository.dart / platform_channels.dart は lib/data/ と lib/presentation/providers.dart 以外から import できません' lib '^(lib/data/|lib/presentation/providers\.dart:)' "['\"][^'\"]*(health_connect_repository|platform_channels)\\.dart['\"]"
+check_rule 'health_connect_repository.dart / platform_channels.dart / shared_preferences_goal_repository.dart は lib/data/ と lib/presentation/providers.dart 以外から import できません' lib '^(lib/data/|lib/presentation/providers\.dart:)' "['\"][^'\"]*(health_connect_repository|platform_channels|shared_preferences_goal_repository)\\.dart['\"]"
 check_rule '相対 import は使えません(package:health_pixcel/ で書いてください)' lib '' \
   "^[[:space:]]*(import|export)[[:space:]]+['\"]\\.\\.?/" \
   "^[[:space:]]*['\"]\\.\\.?/[^'\"]*\\.dart['\"]"

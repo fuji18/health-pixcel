@@ -115,6 +115,8 @@ domain       → (なし。dart:core と intl のみ)
 | `clockProvider` | `Provider<DateTime Function()>` | 現在時刻(既定は `DateTime.now`)。テストで固定値に差し替える |
 | `healthRepositoryProvider` | `Provider<HealthRepository>` | 既定は `HealthConnectRepository`。テストでフェイクに差し替える |
 | `weeklySummaryServiceProvider` | `Provider<WeeklySummaryService>` | 上記 2 つから生成 |
+| `goalRepositoryProvider` | `Provider<GoalRepository>` | 既定は `SharedPreferencesGoalRepository`。テストでフェイクに差し替える |
+| `goalsControllerProvider` | `AsyncNotifierProvider<GoalsController, Goals>` | 目標値。`build()` で読み込み、`save()` で保存して状態を置き換える(autoDispose にしない) |
 | `dashboardControllerProvider` | `AsyncNotifierProvider<DashboardController, DashboardState>` | 画面状態。`build()` で初回の読み込み(`_fetch()`)を行う |
 | `launchActionProvider` | `Provider<LaunchAction>` | 起動理由。起動時のルート名(`WidgetsBinding.instance.platformDispatcher.defaultRouteName`)が `/permission-rationale` なら `permissionRationale`。`app.dart` が最初の画面を決めるために使う |
 
@@ -292,7 +294,7 @@ domain       → (なし。dart:core と intl のみ)
 
 ### 入力検証
 
-- ユーザーの入力項目はない(MVP)
+- 入力項目は目標値(歩数・睡眠時間)のみ。解析・検証は `lib/domain/goal_input.dart` の純関数(`parseStepsGoal` / `parseSleepGoal`)で行う。歩数は 1,000〜100,000、睡眠時間は 3 時間 0 分〜12 時間 0 分。全角数字・カンマは正規化し、空欄は目標なし、非数値・範囲外は理由の文言を返す
 - 外部入力はヘルスコネクトからのデータのみ。`dateTo <= dateFrom` の睡眠セッションは破棄し、歩数の `null` / `0` は記録なしとして扱う(機能設計書 A2 / A3)
 
 ### エラーハンドリング

@@ -153,6 +153,19 @@ class MetricFailed<T> extends MetricResult<T> { final HealthErrorKind kind; }
 enum HealthErrorKind { unavailable, readFailed }
 ```
 
+### エンティティ: Goals(目標値)
+
+```dart
+class Goals {
+  const Goals({this.steps, this.sleepMinutes});
+  final int? steps;         // 1 日の歩数の目標。null = 目標なし
+  final int? sleepMinutes;  // 1 日の睡眠時間の目標(分)。null = 目標なし
+}
+```
+
+- 範囲(両端を含む): 歩数 1,000〜100,000 歩 / 睡眠時間 180〜720 分(3〜12 時間)。範囲と入力の解析は `lib/domain/goal_input.dart` が持つ
+- `toString()` は実装しない(プライバシー検査)
+
 ### エンティティ: DashboardState(画面状態)
 
 読み込み中は `DashboardState` のサブクラスではなく、Riverpod の `AsyncLoading` で表す(「DashboardController」参照)。`requestPermissions()` 中の `AsyncLoading` は Riverpod 3 の仕様で前回の値を引き継ぐ(`state = AsyncLoading()` が自動で `copyWithPrevious` される)ため、画面は `hasValue` ではなく `isLoading` で判定する(`when()` の既定 `skipLoadingOnReload: false` で足りる。#7 で確認)。
@@ -301,6 +314,19 @@ class WeeklySummaryService {
 
 **依存関係**: `HealthRepository`、ドメイン層の関数(`buildDateRange` / `assignSleepToDays`)
 
+### GoalRepository / SharedPreferencesGoalRepository(データ層)
+
+**責務**: 目標値の保存先。`GoalRepository`(抽象)は `Future<Goals> load()` と `Future<void> save(Goals)` を持ち、失敗は内容を持たない `GoalStorageException` に変換する。`save` は null の項目の保存済みの値を削除する。
+
+- `SharedPreferencesGoalRepository` は `shared_preferences` の `SharedPreferencesAsync` で `goal.steps` / `goal.sleep_minutes`(int)を保存する。`SharedPreferencesAsync` は最初の使用時に生成する。`load()` は範囲外の保存値を null として扱う
+- `package:shared_preferences/` の import はこのファイルの 1 行だけで、行末に `privacy-check: allow` を付ける
+
+### GoalsController(プレゼンテーション層・状態管理)
+
+**責務**: `AsyncNotifier<Goals>`(`goalsControllerProvider`)。`build()` で `load()` し、`GoalStorageException` なら `Goals()`(目標なし)にする。`save(Goals)` は成功なら状態を置き換えて `true`、`GoalStorageException` なら状態を変えず `false` を返す。
+
+**依存関係**: `GoalRepository`
+
 ### DashboardController(プレゼンテーション層・状態管理)
 
 **責務**:
@@ -384,6 +410,7 @@ typedef _Snapshot = ({
 | `SleepSection` | `MetricResult<DailySleep>` を受け取り、同上 |
 | `TrendBarChart` | 日別の値を棒グラフで描く。記録なしの日は棒も下地も描かない。全日記録なしなら代替文言。グラフ全体の要約を Semantics で読ませる |
 | `StatusMessage` | 案内・エラーの共通表示(見出し + 説明 + 操作ボタン) |
+| `GoalSettingsScreen` | 目標値の設定画面。歩数(1,000〜100,000 歩)と睡眠時間(時間 3〜12・分 0〜59、合計 3 時間〜12 時間)の数値入力欄。空欄で保存すると目標なし。不正な入力は入力欄の下に理由(「数字で入力してください」等)を出して保存しない。保存成功で SnackBar「目標を保存しました」を出して閉じ、失敗は「保存できませんでした」を出して留まる |
 | `PermissionRationaleScreen` | 権限の利用目的の説明画面(ヘルスコネクトから「利用目的」を開いたときの表示先。案内画面の「詳しく見る」からも開く) |
 | `HealthPixcelApp`(`app.dart`) | `launchActionProvider` を見て最初の画面を決める(`permissionRationale` → `PermissionRationaleScreen`、それ以外 → `DashboardScreen`)。起動理由は同期的に決まるため、判定待ちの画面は無い |
 
@@ -470,7 +497,7 @@ sequenceDiagram
 
 ## 画面遷移図
 
-画面は `DashboardScreen` 1 つで、状態によって表示が切り替わる。`PermissionRationaleScreen` はヘルスコネクトの権限画面から「利用目的」を開いたときだけ表示される。
+画面は `DashboardScreen` 1 つで、状態によって表示が切り替わる。AppBar の旗アイコンから `GoalSettingsScreen` を開く(どの状態でも表示。下の状態機械は変わらない)。`PermissionRationaleScreen` はヘルスコネクトの権限画面から「利用目的」を開いたときだけ表示される。
 
 ```mermaid
 stateDiagram-v2
@@ -652,7 +679,7 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 
 ## ファイル構造
 
-MVP では健康データをファイル・データベースに保存しない。アプリが書き出すファイルはない。
+MVP では健康データをファイル・データベースに保存しない。アプリが書き出すファイルはない。P1 で目標値 2 つ(int)だけを `shared_preferences` に保存する(健康データは保存しない)。
 
 ## パフォーマンス最適化
 
