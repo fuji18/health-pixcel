@@ -14,6 +14,7 @@ Future<void> pumpChart(
   required List<DateTime> dates,
   required List<double?> values,
   String summary = '要約ラベル',
+  double? goalY,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -24,6 +25,7 @@ Future<void> pumpChart(
           maxY: 10,
           axisLabel: (v) => '${v.round()}件',
           semanticsLabel: summary,
+          goalY: goalY,
         ),
       ),
     ),
@@ -105,5 +107,35 @@ void main() {
     expect(groups.first.barRods.single.width, 6);
     expect(find.text(formatShortDate(dates.last)), findsOneWidget);
     expect(find.text(formatShortDate(dates[28])), findsNothing);
+  });
+
+  testWidgets('goalY 省略では目標ラインなし', (tester) async {
+    await pumpChart(
+      tester,
+      dates: datesOf(7),
+      values: [for (var i = 0; i < 7; i++) i + 1.0],
+    );
+    final lines = tester
+        .widget<BarChart>(find.byType(BarChart))
+        .data
+        .extraLinesData
+        .horizontalLines;
+    expect(lines, isEmpty);
+  });
+
+  testWidgets('goalY 指定で目標ラインが 1 本', (tester) async {
+    await pumpChart(
+      tester,
+      dates: datesOf(7),
+      values: [for (var i = 0; i < 7; i++) i + 1.0],
+      goalY: 8,
+    );
+    final lines = tester
+        .widget<BarChart>(find.byType(BarChart))
+        .data
+        .extraLinesData
+        .horizontalLines;
+    expect(lines.length, 1);
+    expect(lines.single.y, 8);
   });
 }

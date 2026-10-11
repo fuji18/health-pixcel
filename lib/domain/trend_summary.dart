@@ -5,7 +5,7 @@ import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 
 /// 歩数グラフの読み上げ要約。[days] は表示期間の全日(順不同)。
-String stepsTrendSummary(List<DailySteps> days) {
+String stepsTrendSummary(List<DailySteps> days, {int? goal}) {
   final n = days.length;
   final values = days.map((d) => d.steps).whereType<int>().toList();
   if (values.isEmpty) return '歩数の推移グラフ。直近 $n 日、記録はありません';
@@ -13,11 +13,12 @@ String stepsTrendSummary(List<DailySteps> days) {
   final avg = (values.reduce((a, b) => a + b) / k).round();
   final maxValue = values.reduce(max);
   return '歩数の推移グラフ。直近 $n 日のうち記録のある日 $k 日、'
-      '1 日平均 ${formatSteps(avg)}、最多 ${formatSteps(maxValue)}';
+      '1 日平均 ${formatSteps(avg)}、最多 ${formatSteps(maxValue)}'
+      '${goal == null ? '' : '、目標 ${formatSteps(goal)}'}';
 }
 
 /// 睡眠時間グラフの読み上げ要約。[days] は表示期間の全日(順不同)。
-String sleepTrendSummary(List<DailySleep> days) {
+String sleepTrendSummary(List<DailySleep> days, {int? goalMinutes}) {
   final n = days.length;
   final totals = days.where((d) => d.hasRecord).map((d) => d.total).toList();
   if (totals.isEmpty) return '睡眠時間の推移グラフ。直近 $n 日、記録はありません';
@@ -26,7 +27,8 @@ String sleepTrendSummary(List<DailySleep> days) {
   final avg = Duration(minutes: (sumMinutes / k).round());
   final maxValue = totals.reduce((a, b) => a > b ? a : b);
   return '睡眠時間の推移グラフ。直近 $n 日のうち記録のある日 $k 日、'
-      '1 日平均 ${formatDuration(avg)}、最長 ${formatDuration(maxValue)}';
+      '1 日平均 ${formatDuration(avg)}、最長 ${formatDuration(maxValue)}'
+      '${goalMinutes == null ? '' : '、目標 ${formatDuration(Duration(minutes: goalMinutes))}'}';
 }
 
 /// 歩数グラフの縦軸上限。2,000 歩単位で切り上げ、最小 2,000。

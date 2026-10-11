@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health_pixcel/domain/models/display_period.dart';
+import 'package:health_pixcel/domain/models/goals.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_controller.dart';
@@ -14,6 +15,7 @@ import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/sleep_section.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/steps_section.dart';
 import 'package:health_pixcel/presentation/goals/goal_settings_screen.dart';
+import 'package:health_pixcel/presentation/goals/goals_controller.dart';
 import 'package:health_pixcel/presentation/providers.dart';
 import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -38,11 +40,14 @@ const bothGranted = (
 );
 
 late FakeHealthRepository fake;
+late FakeGoalRepository goalRepository;
 
 Future<void> pumpScreen(
   WidgetTester tester, {
   List<Override> overrides = const [],
+  Goals goals = const Goals(),
 }) async {
+  goalRepository = FakeGoalRepository()..stored = goals;
   tester.view.physicalSize = const Size(800, 2400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -50,6 +55,7 @@ Future<void> pumpScreen(
     ProviderScope(
       overrides: [
         healthRepositoryProvider.overrideWithValue(fake),
+        goalRepositoryProvider.overrideWithValue(goalRepository),
         clockProvider.overrideWithValue(() => now),
         ...overrides,
       ],
@@ -81,6 +87,17 @@ void seedData() {
 void main() {
   setUpAll(() => initializeDateFormatting('ja'));
   setUp(() => fake = FakeHealthRepository());
+
+  List<HorizontalLine> linesIn(WidgetTester tester, Type section) => tester
+      .widget<BarChart>(
+        find.descendant(
+          of: find.byType(section),
+          matching: find.byType(BarChart),
+        ),
+      )
+      .data
+      .extraLinesData
+      .horizontalLines;
 
   testWidgets('1 権限確認中はローディングを表示する', (tester) async {
     final gate = Completer<void>();
@@ -460,15 +477,86 @@ void main() {
 
   testWidgets('25 旗アイコンで目標の設定画面が開く', (tester) async {
     seedData();
-    await pumpScreen(
-      tester,
-      overrides: [
-        goalRepositoryProvider.overrideWithValue(FakeGoalRepository()),
-      ],
-    );
+    await pumpScreen(tester);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('目標の設定'));
     await tester.pumpAndSettle();
     expect(find.byType(GoalSettingsScreen), findsOneWidget);
+  });
+
+  testWidgets('26 目標なしでは達成マーク・目標表示・目標ラインが出ない', (tester) async {
+    seedData();
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('達成'), findsNothing);
+    expect(find.text('未達'), findsNothing);
+    expect(find.textContaining('目標 '), findsNothing);
+    expect(linesIn(tester, StepsSection), isEmpty);
+    expect(linesIn(tester, SleepSection), isEmpty);
+  });
+
+  testWidgets('27 歩数の目標: 達成マーク・目標表示・目標ライン', (tester) async {
+    final handle = tester.ensureSemantics();
+    seedData();
+    await pumpScreen(tester, goals: const Goals(steps: 8000));
+    await tester.pumpAndSettle();
+    expect(find.text('目標 8,000 歩'), findsOneWidget);
+    expect(find.text('達成'), findsOneWidget);
+    expect(find.text('未達'), findsNothing);
+    final lines = linesIn(tester, StepsSection);
+    expect(lines.length, 1);
+    expect(lines.single.y, 8000);
+    expect(linesIn(tester, SleepSection), isEmpty);
+    final chart = tester.widget<BarChart>(
+      find.descendant(
+        of: find.byType(StepsSection),
+        matching: find.byType(BarChart),
+      ),
+    );
+    expect(chart.data.maxY, 10000);
+    expect(
+      find.bySemanticsLabel(RegExp(r'10/5[\s\S]*8,432 歩[\s\S]*達成')),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel(RegExp(r'10/6[\s\S]*(達成|未達)')), findsNothing);
+    handle.dispose();
+  });
+
+  testWidgets('27b 文字を大きくしても達成マークで行があふれない', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    seedData();
+    await pumpScreen(tester, goals: const Goals(steps: 8000));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('28 今日の途中値が目標以上なら達成', (tester) async {
+    seedData();
+    await pumpScreen(tester, goals: const Goals(steps: 3000));
+    await tester.pumpAndSettle();
+    expect(find.text('達成'), findsNWidgets(2));
+  });
+
+  testWidgets('29 睡眠の目標に届かない日は未達', (tester) async {
+    seedData();
+    await pumpScreen(tester, goals: const Goals(sleepMinutes: 600));
+    await tester.pumpAndSettle();
+    expect(find.text('未達'), findsWidgets);
+    expect(find.text('達成'), findsNothing);
+    expect(linesIn(tester, SleepSection).single.y, 10);
+  });
+
+  testWidgets('30 目標の保存がダッシュボードに即時反映される', (tester) async {
+    seedData();
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('目標 8,000 歩'), findsNothing);
+    await ProviderScope.containerOf(
+      tester.element(find.byType(DashboardScreen)),
+    ).read(goalsControllerProvider.notifier).save(const Goals(steps: 8000));
+    await tester.pumpAndSettle();
+    expect(find.text('目標 8,000 歩'), findsOneWidget);
+    expect(find.text('達成'), findsOneWidget);
   });
 }

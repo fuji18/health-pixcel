@@ -98,4 +98,23 @@ void main() {
       expect(sleepAxisMaxHours([const Duration(minutes: 45)]), 2);
     });
   });
+
+  group('目標つきの要約', () {
+    test('歩数: 末尾に目標', () {
+      final days = [steps(1, 1000), steps(2, 2000), steps(3, 6000)];
+      expect(stepsTrendSummary(days, goal: 8000), endsWith('、目標 8,000 歩'));
+    });
+
+    test('歩数: 記録なしは従来の文言', () {
+      final days = [steps(1, null), steps(2, null)];
+      expect(stepsTrendSummary(days, goal: 8000), stepsTrendSummary(days));
+    });
+
+    test('睡眠: 末尾に目標', () {
+      final days = [
+        sleep(1, [(0, 420)]),
+      ];
+      expect(sleepTrendSummary(days, goalMinutes: 450), endsWith('、目標 7時間30分'));
+    });
+  });
 }
