@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 import 'package:health_pixcel/domain/models/date_range.dart';
@@ -17,7 +18,7 @@ final dashboardControllerProvider =
 /// 利用可否が available 以外のときは権限を取得しないため null。
 typedef _Snapshot = ({
   HealthAvailability availability,
-  ({PermissionStatus steps, PermissionStatus sleep})? permissions,
+  HealthPermissions? permissions,
 });
 
 /// ダッシュボードの状態遷移(機能設計書「DashboardController」)。
@@ -144,33 +145,38 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         availability: HealthAvailability.available,
         permissions: permissions,
       );
-      final stepsGranted = permissions.steps == PermissionStatus.granted;
-      final sleepGranted = permissions.sleep == PermissionStatus.granted;
-      // 3. 両方未許可
-      if (!stepsGranted && !sleepGranted) {
-        return const DashboardNeedsPermission();
-      }
+      // 3. すべて未許可
+      if (permissions.noneGranted) return const DashboardNeedsPermission();
       // 4. 許可済みの種別だけ並行に読む
       final r = range = service.currentRange(dayCount: period.dayCount);
       final (
         MetricResult<DailySteps> stepsResult,
         MetricResult<DailySleep> sleepResult,
+        MetricResult<DailyHeartRate> heartRateResult,
       ) = await (
-        stepsGranted
+        permissions.isGranted(HealthMetric.steps)
             ? service.loadSteps(r)
             : Future<MetricResult<DailySteps>>.value(
                 const MetricPermissionDenied<DailySteps>(),
               ),
-        sleepGranted
+        permissions.isGranted(HealthMetric.sleep)
             ? service.loadSleep(r)
             : Future<MetricResult<DailySleep>>.value(
                 const MetricPermissionDenied<DailySleep>(),
               ),
+        permissions.isGranted(HealthMetric.heartRate)
+            ? service.loadHeartRate(r)
+            : Future<MetricResult<DailyHeartRate>>.value(
+                const MetricPermissionDenied<DailyHeartRate>(),
+              ),
       ).wait;
       var steps = stepsResult;
       var sleep = sleepResult;
+      var heartRate = heartRateResult;
       // 5. 読み込み中の unavailable は利用可否を再確認する
-      if (_isUnavailable(steps) || _isUnavailable(sleep)) {
+      if (_isUnavailable(steps) ||
+          _isUnavailable(sleep) ||
+          _isUnavailable(heartRate)) {
         final again = await repository.checkAvailability();
         if (again != HealthAvailability.available) {
           _lastSnapshot = (availability: again, permissions: null);
@@ -182,6 +188,11 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         if (_isUnavailable(sleep)) {
           sleep = const MetricFailed<DailySleep>(HealthErrorKind.readFailed);
         }
+        if (_isUnavailable(heartRate)) {
+          heartRate = const MetricFailed<DailyHeartRate>(
+            HealthErrorKind.readFailed,
+          );
+        }
       }
       // 6.
       return DashboardReady(
@@ -189,6 +200,7 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         range: r,
         steps: steps,
         sleep: sleep,
+        heartRate: heartRate,
       );
     } catch (_) {
       // 7. 想定外の例外。値をログに出さない。次の復帰で必ず読み直すため snapshot を捨てる
@@ -198,6 +210,9 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         range: range ?? service.currentRange(dayCount: period.dayCount),
         steps: const MetricFailed<DailySteps>(HealthErrorKind.readFailed),
         sleep: const MetricFailed<DailySleep>(HealthErrorKind.readFailed),
+        heartRate: const MetricFailed<DailyHeartRate>(
+          HealthErrorKind.readFailed,
+        ),
       );
     }
   }

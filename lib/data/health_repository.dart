@@ -1,4 +1,5 @@
 import 'package:health_pixcel/domain/models/health_status.dart';
+import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
 
 /// ヘルスデータ基盤へのアクセス(データ層の抽象)。
@@ -9,12 +10,11 @@ abstract interface class HealthRepository {
   /// ヘルスデータ基盤の利用可否。
   Future<HealthAvailability> checkAvailability();
 
-  /// 歩数・睡眠それぞれの権限状態。
-  Future<({PermissionStatus steps, PermissionStatus sleep})> checkPermissions();
+  /// データ種別ごとの権限状態。
+  Future<HealthPermissions> checkPermissions();
 
-  /// 歩数・睡眠の READ 権限をまとめてリクエストし、リクエスト後の状態を返す。
-  Future<({PermissionStatus steps, PermissionStatus sleep})>
-  requestPermissions();
+  /// 歩数・睡眠・心拍の READ 権限をまとめてリクエストし、リクエスト後の状態を返す。
+  Future<HealthPermissions> requestPermissions();
 
   /// ヘルスコネクトのアプリ権限設定画面を開く(ダイアログが出なくなった場合の逃げ道)。
   /// 開けなかった場合は false を返す。
@@ -29,6 +29,9 @@ abstract interface class HealthRepository {
   /// [start, end) と重なる睡眠セッション(start / end はローカル時刻)。
   /// 失敗時は [HealthReadException] を投げる。
   Future<List<SleepSession>> readSleepSessions(DateTime start, DateTime end);
+
+  /// [start, end) の心拍の集計値。記録なしは null。失敗時は [HealthReadException] を投げる。
+  Future<HeartRateStats?> readHeartRate(DateTime start, DateTime end);
 }
 
 /// ヘルスデータの読み取り失敗。メッセージに健康データの値を含めない。

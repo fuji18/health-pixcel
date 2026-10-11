@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health_pixcel/domain/date_range_builder.dart';
+import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 import 'package:health_pixcel/domain/models/display_period.dart';
+import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
@@ -30,16 +32,29 @@ void main() {
                 : const [],
           ),
       ]);
+  MetricLoaded<DailyHeartRate> heartOf({bool withRecordOnToday = false}) =>
+      MetricLoaded([
+        for (var i = 0; i < 7; i++)
+          DailyHeartRate(
+            date: range.days[i],
+            stats: i == 0 && withRecordOnToday
+                ? const HeartRateStats(average: 68, min: 52, max: 128)
+                : null,
+            isToday: i == 0,
+          ),
+      ]);
   const noSteps = <int?>[null, null, null, null, null, null, null];
 
   DashboardReady ready(
     MetricResult<DailySteps> steps,
-    MetricResult<DailySleep> sleep,
-  ) => DashboardReady(
+    MetricResult<DailySleep> sleep, [
+    MetricResult<DailyHeartRate> heartRate = const MetricPermissionDenied(),
+  ]) => DashboardReady(
     period: DisplayPeriod.week,
     range: range,
     steps: steps,
     sleep: sleep,
+    heartRate: heartRate,
   );
 
   group('isAllEmpty', () {
@@ -78,6 +93,40 @@ void main() {
           const MetricPermissionDenied(),
         ).isAllEmpty,
         isFalse,
+      );
+    });
+
+    test('心拍だけ記録あり', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          heartOf(withRecordOnToday: true),
+        ).isAllEmpty,
+        isFalse,
+      );
+    });
+    test('3 種とも全日記録なし', () {
+      expect(ready(stepsOf(noSteps), sleepOf(), heartOf()).isAllEmpty, isTrue);
+    });
+    test('心拍が MetricFailed', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          const MetricFailed(HealthErrorKind.readFailed),
+        ).isAllEmpty,
+        isFalse,
+      );
+    });
+    test('心拍だけ未許可で歩数・睡眠が全日記録なし', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          const MetricPermissionDenied(),
+        ).isAllEmpty,
+        isTrue,
       );
     });
   });

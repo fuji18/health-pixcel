@@ -96,6 +96,19 @@ HealthDataPoint _sleep(DateTime from, DateTime to) => HealthDataPoint(
   sourceName: 'n',
 );
 
+HealthDataPoint _heart(DateTime from, num bpm) => HealthDataPoint(
+  uuid: 'u',
+  value: NumericHealthValue(numericValue: bpm),
+  type: HealthDataType.HEART_RATE,
+  unit: HealthDataUnit.BEATS_PER_MINUTE,
+  dateFrom: from,
+  dateTo: from,
+  sourcePlatform: HealthPlatformType.googleHealthConnect,
+  sourceDeviceId: 'd',
+  sourceId: 's',
+  sourceName: 'n',
+);
+
 Matcher _readException(HealthErrorKind kind) =>
     throwsA(isA<HealthReadException>().having((e) => e.kind, 'kind', kind));
 
@@ -132,31 +145,43 @@ void main() {
       fake.granted = {
         HealthDataType.STEPS: true,
         HealthDataType.SLEEP_SESSION: false,
+        HealthDataType.HEART_RATE: false,
       };
-      expect(await repo.checkPermissions(), (
-        steps: PermissionStatus.granted,
-        sleep: PermissionStatus.denied,
-      ));
+      expect(
+        await repo.checkPermissions(),
+        const HealthPermissions({HealthMetric.steps}),
+      );
     });
 
-    test('null は未許可', () async {
+    test('null / false は未許可(心拍だけ未許可)', () async {
       fake.granted = {
-        HealthDataType.STEPS: null,
+        HealthDataType.STEPS: true,
         HealthDataType.SLEEP_SESSION: true,
+        HealthDataType.HEART_RATE: null,
       };
-      expect(await repo.checkPermissions(), (
-        steps: PermissionStatus.denied,
-        sleep: PermissionStatus.granted,
-      ));
+      expect(
+        await repo.checkPermissions(),
+        const HealthPermissions({HealthMetric.steps, HealthMetric.sleep}),
+      );
+      fake.granted[HealthDataType.HEART_RATE] = false;
+      expect(
+        await repo.checkPermissions(),
+        const HealthPermissions({HealthMetric.steps, HealthMetric.sleep}),
+      );
     });
 
     test('種別ごとに個別に問い合わせる', () async {
       await repo.checkPermissions();
-      expect(fake.hasPermissionsCalls, hasLength(2));
-      expect(fake.hasPermissionsCalls[0].$1, [HealthDataType.STEPS]);
-      expect(fake.hasPermissionsCalls[0].$2, [HealthDataAccess.READ]);
-      expect(fake.hasPermissionsCalls[1].$1, [HealthDataType.SLEEP_SESSION]);
-      expect(fake.hasPermissionsCalls[1].$2, [HealthDataAccess.READ]);
+      expect(fake.hasPermissionsCalls, hasLength(3));
+      final types = [for (final c in fake.hasPermissionsCalls) c.$1];
+      expect(types, [
+        [HealthDataType.STEPS],
+        [HealthDataType.SLEEP_SESSION],
+        [HealthDataType.HEART_RATE],
+      ]);
+      for (final c in fake.hasPermissionsCalls) {
+        expect(c.$2, [HealthDataAccess.READ]);
+      }
     });
   });
 
@@ -165,20 +190,28 @@ void main() {
       fake.granted = {
         HealthDataType.STEPS: false,
         HealthDataType.SLEEP_SESSION: false,
+        HealthDataType.HEART_RATE: false,
       };
       fake.grantedAfterRequest = {
         HealthDataType.STEPS: true,
         HealthDataType.SLEEP_SESSION: true,
+        HealthDataType.HEART_RATE: true,
       };
-      expect(await repo.requestPermissions(), (
-        steps: PermissionStatus.granted,
-        sleep: PermissionStatus.granted,
-      ));
+      expect(
+        await repo.requestPermissions(),
+        const HealthPermissions({
+          HealthMetric.steps,
+          HealthMetric.sleep,
+          HealthMetric.heartRate,
+        }),
+      );
       expect(fake.requestCalls.single.$1, [
         HealthDataType.STEPS,
         HealthDataType.SLEEP_SESSION,
+        HealthDataType.HEART_RATE,
       ]);
       expect(fake.requestCalls.single.$2, [
+        HealthDataAccess.READ,
         HealthDataAccess.READ,
         HealthDataAccess.READ,
       ]);
@@ -250,6 +283,41 @@ void main() {
       ];
       final result = await repo.readSleepSessions(start, end);
       expect(() => result.add(result.first), throwsUnsupportedError);
+    });
+  });
+
+  group('readHeartRate', () {
+    test('区間内の標本だけで集計する', () async {
+      fake.points = [
+        _heart(start.subtract(const Duration(minutes: 1)), 200), // 区間の前
+        _heart(start, 60), // start ちょうどは含む
+        _heart(start.add(const Duration(hours: 3)), 100),
+        _heart(end, 30), // end ちょうどは除外
+      ];
+      final stats = await repo.readHeartRate(start, end);
+      expect(stats!.average, 80);
+      expect(stats.min, 60);
+      expect(stats.max, 100);
+      expect(fake.dataCalls.single.$1, [HealthDataType.HEART_RATE]);
+      expect(fake.dataCalls.single.$2, start);
+      expect(fake.dataCalls.single.$3, end);
+    });
+
+    test('標本なし → null', () async {
+      expect(await repo.readHeartRate(start, end), isNull);
+    });
+
+    test('例外の変換', () async {
+      fake.readError = StateError('x');
+      await expectLater(
+        repo.readHeartRate(start, end),
+        _readException(HealthErrorKind.readFailed),
+      );
+      fake.readError = UnsupportedError('x');
+      await expectLater(
+        repo.readHeartRate(start, end),
+        _readException(HealthErrorKind.unavailable),
+      );
     });
   });
 

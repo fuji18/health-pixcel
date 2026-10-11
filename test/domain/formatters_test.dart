@@ -81,4 +81,11 @@ void main() {
       expect(formatNumber(12000), '12,000');
     });
   });
+
+  group('formatBpm', () {
+    test('bpm 表記', () {
+      expect(formatBpm(68), '68 bpm');
+      expect(formatBpmRange(52, 128), '(52〜128)');
+    });
+  });
 }

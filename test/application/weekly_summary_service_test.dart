@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:health_pixcel/application/weekly_summary_service.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
+import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
+import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
 
@@ -134,5 +136,44 @@ void main() {
     await service.loadSteps(r);
     await service.loadSleep(r);
     expect(clockCalls, 1);
+  });
+
+  group('loadHeartRate', () {
+    test('日数分を新しい順に返し、記録なしは stats == null', () async {
+      fake.heartRates[DateTime(2026, 10, 6)] = const HeartRateStats(
+        average: 68,
+        min: 52,
+        max: 128,
+      );
+      final result = await service.loadHeartRate(service.currentRange());
+      final days = (result as MetricLoaded<DailyHeartRate>).days;
+      expect(days, hasLength(7));
+      expect(days.first.date, DateTime(2026, 10, 6));
+      expect(days.first.isToday, isTrue);
+      expect(days.first.stats!.average, 68);
+      expect(days.last.date, DateTime(2026, 9, 30));
+      expect(days[1].stats, isNull);
+      expect(days[1].isToday, isFalse);
+    });
+
+    test('今日は [today, now)、それ以外は [day, nextDay)', () async {
+      await service.loadHeartRate(service.currentRange());
+      expect(fake.heartRateCalls, hasLength(7));
+      expect(fake.heartRateCalls.first, (DateTime(2026, 10, 6), now));
+      expect(fake.heartRateCalls[1], (
+        DateTime(2026, 10, 5),
+        DateTime(2026, 10, 6),
+      ));
+    });
+
+    test('1 日でも失敗 → MetricFailed', () async {
+      fake.heartRateErrors[DateTime(2026, 10, 3)] = HealthErrorKind.readFailed;
+      final result = await service.loadHeartRate(service.currentRange());
+      expect(result, isA<MetricFailed<DailyHeartRate>>());
+      expect(
+        (result as MetricFailed<DailyHeartRate>).kind,
+        HealthErrorKind.readFailed,
+      );
+    });
   });
 }
