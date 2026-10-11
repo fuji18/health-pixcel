@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:health_pixcel/domain/formatters.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
+import 'package:health_pixcel/domain/trend_summary.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/status_message.dart';
+import 'package:health_pixcel/presentation/dashboard/widgets/trend_bar_chart.dart';
 
-/// 歩数セクション。7 行の一覧・未許可の案内・エラー表示のいずれかを描画する。
+/// 歩数セクション。推移グラフと日別一覧・未許可の案内・エラー表示のいずれかを描画する。
 class StepsSection extends StatelessWidget {
   const StepsSection({
     super.key,
@@ -46,6 +48,14 @@ class StepsSection extends StatelessWidget {
           MetricLoaded<DailySteps>(:final days) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              TrendBarChart(
+                dates: [for (final d in days.reversed) d.date],
+                values: [for (final d in days.reversed) d.steps?.toDouble()],
+                maxY: stepsAxisMax(days.map((d) => d.steps).whereType<int>()),
+                axisLabel: (v) => formatNumber(v.round()),
+                semanticsLabel: stepsTrendSummary(days),
+              ),
+              const SizedBox(height: 16),
               for (final day in days) _StepsRow(day: day, today: today),
             ],
           ),

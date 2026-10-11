@@ -38,3 +38,11 @@ String formatDuration(Duration duration) {
   if (m == 0) return '$h時間';
   return '$h時間$m分';
 }
+
+/// 日付を `10/6` 形式にする(グラフの横軸ラベル用)。
+///
+/// 事前に `initializeDateFormatting('ja')` が必要。
+String formatShortDate(DateTime date) => DateFormat('M/d', 'ja').format(date);
+
+/// 整数を `8,432` 形式にする(3 桁区切りは半角 `,`。単位なし)。
+String formatNumber(int value) => NumberFormat('#,##0', 'ja').format(value);
