@@ -24,7 +24,7 @@
 
 - `.github/workflows/ci.yml`: `quality` ジョブ(Flutter の format / analyze / test / scripts / リリースビルド / 権限検査。`pubspec.yaml` 不在時はスキップ。secretlint は Node で継続)
 - `.claude/scripts/lint-on-edit.sh`: 対象を `*.dart` に、検査を `dart analyze <file>` に
-- `.claude/hooks/session-start.sh`: リモート時の `flutter pub get` と、serena 規模検知の対象拡張子 `*.dart`
+- `.claude/hooks/session-start.sh`: リモート時の `flutter pub get` と、serena 規模検知の対象拡張子 `*.dart`、`lib-*.sh` のディスク実行ビット検査を `core.fileMode=false` で飛ばす分岐(Windows マウントでの誤警告対策。#28)
 
 ### ハーネス(/harness-setup)
 

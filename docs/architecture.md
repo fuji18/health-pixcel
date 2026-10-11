@@ -55,6 +55,7 @@
 | CI(GitHub Actions) | ubuntu + `subosito/flutter-action` | 上記すべての検証コマンド + リリースビルド + 権限検査 |
 
 - `.devcontainer/` には Node(ハーネス用)と Flutter SDK を入れる。Android 実機との USB 接続とリリースビルドは Windows 側で行う(2026-10-06 決定。`.steering/20261006-flutter-stack-migration/`)
+- devcontainer の `PATH` には `devcontainer.json` の `remoteEnv` で `/home/vscode/flutter/bin` を入れる(`remoteUser: vscode` 前提。`${containerEnv:HOME}` は空に展開されるため使わない)。git の作成者は `post_create.sh` が gh のアカウントから noreply 形式で `.git/config` に設定する(メールアドレスをリポジトリにコミットしない。#28)
 - `scripts/*.sh` は Git Bash と ubuntu の両方で動く POSIX シェルで書く
 
 ## アーキテクチャパターン
