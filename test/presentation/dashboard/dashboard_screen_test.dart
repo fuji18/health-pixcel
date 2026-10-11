@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -10,6 +11,8 @@ import 'package:health_pixcel/domain/models/sleep_session.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_controller.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_screen.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
+import 'package:health_pixcel/presentation/dashboard/widgets/sleep_section.dart';
+import 'package:health_pixcel/presentation/dashboard/widgets/steps_section.dart';
 import 'package:health_pixcel/presentation/providers.dart';
 import 'package:health_pixcel/presentation/rationale/permission_rationale_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -409,5 +412,47 @@ void main() {
     await tester.tap(find.text('30 日'));
     await tester.pumpAndSettle();
     expect(find.text('歩数の権限が許可されていません'), findsOneWidget);
+  });
+
+  testWidgets('23 グラフは歩数・睡眠の両方に出て、期間に追従する', (tester) async {
+    seedData();
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    final charts = find.byType(BarChart, skipOffstage: false);
+    expect(charts, findsNWidgets(2));
+    for (final e in charts.evaluate()) {
+      expect((e.widget as BarChart).data.barGroups.length, 7);
+    }
+    await tester.tap(find.text('30 日'));
+    await tester.pumpAndSettle();
+    expect(charts, findsNWidgets(2));
+    for (final e in charts.evaluate()) {
+      expect((e.widget as BarChart).data.barGroups.length, 30);
+    }
+  });
+
+  testWidgets('24 未許可のセクションにはグラフが出ない', (tester) async {
+    seedData();
+    fake.permissions = (
+      steps: PermissionStatus.denied,
+      sleep: PermissionStatus.granted,
+    );
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(find.byType(BarChart, skipOffstage: false), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(StepsSection, skipOffstage: false),
+        matching: find.byType(BarChart, skipOffstage: false),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(SleepSection, skipOffstage: false),
+        matching: find.byType(BarChart, skipOffstage: false),
+      ),
+      findsOneWidget,
+    );
   });
 }

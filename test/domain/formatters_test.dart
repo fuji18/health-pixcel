@@ -67,4 +67,18 @@ void main() {
       expect(formatDuration(Duration.zero), '0分');
     });
   });
+
+  group('formatShortDate', () {
+    test('M/d 形式', () {
+      expect(formatShortDate(DateTime(2026, 10, 6)), '10/6');
+    });
+  });
+
+  group('formatNumber', () {
+    test('千の区切りが入る', () {
+      expect(formatNumber(0), '0');
+      expect(formatNumber(8432), '8,432');
+      expect(formatNumber(12000), '12,000');
+    });
+  });
 }

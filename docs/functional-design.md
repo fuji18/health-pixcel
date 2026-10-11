@@ -380,8 +380,9 @@ typedef _Snapshot = ({
 | コンポーネント | 責務 |
 |---|---|
 | `DashboardScreen` | 唯一の画面。`DashboardState` に応じて以下を出し分ける。`DashboardReady` のときだけリスト先頭に期間の切り替え(`SegmentedButton<DisplayPeriod>`。「7 日」「30 日」)を置く |
-| `StepsSection` | `MetricResult<DailySteps>` を受け取り、期間の日数分(7 / 30 行)の一覧・未許可案内・エラー表示のいずれかを描画 |
+| `StepsSection` | `MetricResult<DailySteps>` を受け取り、推移グラフ(`TrendBarChart`)と期間の日数分(7 / 30 行)の一覧・未許可案内・エラー表示のいずれかを描画 |
 | `SleepSection` | `MetricResult<DailySleep>` を受け取り、同上 |
+| `TrendBarChart` | 日別の値を棒グラフで描く。記録なしの日は棒も下地も描かない。全日記録なしなら代替文言。グラフ全体の要約を Semantics で読ませる |
 | `StatusMessage` | 案内・エラーの共通表示(見出し + 説明 + 操作ボタン) |
 | `PermissionRationaleScreen` | 権限の利用目的の説明画面(ヘルスコネクトから「利用目的」を開いたときの表示先。案内画面の「詳しく見る」からも開く) |
 | `HealthPixcelApp`(`app.dart`) | `launchActionProvider` を見て最初の画面を決める(`permissionRationale` → `PermissionRationaleScreen`、それ以外 → `DashboardScreen`)。起動理由は同期的に決まるため、判定待ちの画面は無い |
@@ -579,6 +580,7 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 ├────────────────────────────────┤
 │ [   7 日   |   30 日   ]        │  ← 期間の切り替え(全幅の SegmentedButton)
 │ 睡眠                            │
+│ [ 推移グラフ(棒)。左が古い日 ]   │
 │ 今日 10/6(火)  23:45→06:57 7時間12分 │
 │ 昨日 10/5(月)  00:10→07:20 7時間50分 │  ← 日別合計
 │                13:00→13:40          │  ← 同日の2件目
@@ -586,6 +588,7 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 │ …(7行 / 30行)                   │
 ├────────────────────────────────┤
 │ 歩数                            │
+│ [ 推移グラフ(棒)。左が古い日 ]   │
 │ 今日 10/6(火)   3,210 歩 (途中)     │
 │ 昨日 10/5(月)   8,432 歩           │
 │ 10/4(日)        記録なし           │
@@ -614,6 +617,17 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 | 日付 | 対象日 | A4 の日付形式 |
 | 歩数 | 日別合計。今日は「(途中)」を付ける | A4 の歩数形式 |
 
+### 推移グラフ(睡眠・歩数共通)
+
+- 横軸 = 日付(`M/d`)。7 日表示は全日、30 日表示は今日から 7 日おきにラベルを付ける。左が古い日、右が今日
+- 縦軸 = 歩数(2,000 歩単位で切り上げ、最小 2,000)/ 睡眠時間(2 時間単位で切り上げ、最小 2 時間)。中間線と上限の 2 か所にラベルを付ける
+- 記録なしの日は棒も下地も描かない。値 0 の日は下地があるので記録なしと見分けられる
+- 全日記録なしのときはグラフを描かず「この期間の記録はありません」を表示する
+- スクリーンリーダーにはグラフ全体の要約を読ませる(棒ごとには読ませない。日別の値は下の一覧で読める)
+  - 歩数あり: `歩数の推移グラフ。直近 N 日のうち記録のある日 K 日、1 日平均 X 歩、最多 Y 歩`
+  - 睡眠あり: `睡眠時間の推移グラフ。直近 N 日のうち記録のある日 K 日、1 日平均 X、最長 Y`
+  - 記録なし: `歩数の推移グラフ。直近 N 日、記録はありません` / `睡眠時間の推移グラフ。直近 N 日、記録はありません`
+
 ### 状態別の表示
 
 | 状態 | 表示 | 操作 |
@@ -633,6 +647,7 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 
 - 「記録なし」「(途中)」は本文より弱い色(`onSurfaceVariant` 相当)で表示し、値のある行と区別する
 - エラー・案内は `docs/ui-design-guidelines.md` の基準に従い、色だけに頼らず文言で状態を伝える
+- 推移グラフの棒は `primary`、記録のある日の下地は `surfaceContainerHighest`、補助線は `outlineVariant`。記録の有無は下地の有無(形)で区別する
 - 具体的な配色は `docs/ui-design-guidelines.md` §7 の記入(`/kickoff` フェーズ1.5)に従う
 
 ## ファイル構造
@@ -688,6 +703,7 @@ MVP では健康データをファイル・データベースに保存しない�
 ### ウィジェットテスト(`flutter test`)
 - `DashboardScreen` が各 `DashboardState` で「状態別の表示」の文言と操作ボタンを出す
 - `Ready` で 7 行ずつ表示され、記録なしの日も行が省略されない
+- 推移グラフ(データあり / 一部記録なし / 全日記録なし / 30 日)
 
 ### 実機確認(Pixel 10、手動)
 - 初回起動 → 権限許可 → 再起動なしで表示(F1)

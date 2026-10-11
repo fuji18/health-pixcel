@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:health_pixcel/domain/formatters.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
+import 'package:health_pixcel/domain/trend_summary.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/status_message.dart';
+import 'package:health_pixcel/presentation/dashboard/widgets/trend_bar_chart.dart';
 
-/// 睡眠セクション。7 行の一覧・未許可の案内・エラー表示のいずれかを描画する。
+/// 睡眠セクション。推移グラフと日別一覧・未許可の案内・エラー表示のいずれかを描画する。
 class SleepSection extends StatelessWidget {
   const SleepSection({
     super.key,
@@ -46,6 +48,19 @@ class SleepSection extends StatelessWidget {
           MetricLoaded<DailySleep>(:final days) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              TrendBarChart(
+                dates: [for (final d in days.reversed) d.date],
+                values: [
+                  for (final d in days.reversed)
+                    d.hasRecord ? d.total.inMinutes / 60 : null,
+                ],
+                maxY: sleepAxisMaxHours(
+                  days.where((d) => d.hasRecord).map((d) => d.total),
+                ),
+                axisLabel: (v) => '${v.round()}時間',
+                semanticsLabel: sleepTrendSummary(days),
+              ),
+              const SizedBox(height: 16),
               for (final day in days) _SleepRow(day: day, today: today),
             ],
           ),

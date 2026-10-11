@@ -48,6 +48,7 @@ lib/domain/
 │   └── health_status.dart        # PermissionStatus / HealthAvailability / HealthErrorKind / LaunchAction
 ├── date_range_builder.dart       # buildDateRange / nextDay(機能設計書 A1)
 ├── sleep_assignment.dart         # assignSleepToDays(A3)
+├── trend_summary.dart            # 推移グラフの読み上げ要約・縦軸上限
 └── formatters.dart               # 日付・歩数・時刻・時間のフォーマット(A4)
 ```
 
@@ -101,7 +102,8 @@ lib/presentation/
 │   └── widgets/
 │       ├── sleep_section.dart        # SleepSection
 │       ├── steps_section.dart        # StepsSection
-│       └── status_message.dart       # StatusMessage(案内・エラーの共通表示)
+│       ├── status_message.dart       # StatusMessage(案内・エラーの共通表示)
+│       └── trend_bar_chart.dart      # TrendBarChart
 └── rationale/
     └── permission_rationale_screen.dart  # PermissionRationaleScreen
 ```
@@ -120,6 +122,7 @@ test/
 ├── domain/
 │   ├── date_range_builder_test.dart
 │   ├── sleep_assignment_test.dart
+│   ├── trend_summary_test.dart
 │   └── formatters_test.dart
 ├── application/
 │   └── weekly_summary_service_test.dart
@@ -127,7 +130,9 @@ test/
 │   ├── dashboard/
 │   │   ├── dashboard_state_test.dart       # isAllEmpty
 │   │   ├── dashboard_controller_test.dart
-│   │   └── dashboard_screen_test.dart
+│   │   ├── dashboard_screen_test.dart
+│   │   └── widgets/
+│   │       └── trend_bar_chart_test.dart
 │   └── rationale/
 │       └── permission_rationale_screen_test.dart
 ├── data/
