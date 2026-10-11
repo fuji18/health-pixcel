@@ -21,7 +21,9 @@ health-pixcel のドキュメントとコードで使う用語の定義。**ド�
 | 日別睡眠 | `DailySleep` | データモデル用語 |
 | 記録なし | `null`(歩数)/ 空の `sessions`(睡眠) | ドメイン用語 |
 | 取得結果 | `MetricResult` | ステータス・状態 |
-| 権限状態 | `PermissionStatus` | ステータス・状態 |
+| 権限状態 | `HealthPermissions`(許可済みの `HealthMetric` の集合) | ステータス・状態 |
+| データ種別 | `HealthMetric`(`steps` / `sleep` / `heartRate`) | ドメイン用語 |
+| 日別心拍 | `DailyHeartRate`(`HeartRateStats` = 平均・最小・最大) | データモデル用語 |
 | 利用可否 | `HealthAvailability` | ステータス・状態 |
 | 画面状態 | `DashboardState`(`DashboardUnavailable` / `DashboardNeedsPermission` / `DashboardReady`) | ステータス・状態 |
 | 読み込み中 | `AsyncLoading`(Riverpod) | ステータス・状態 |
@@ -319,12 +321,15 @@ presentation ──→ application ──→ domain
 | `MetricPermissionDenied` | その種別の権限が未許可 |
 | `MetricFailed` | 読み取りに失敗した(`HealthErrorKind` 付き) |
 
-### 権限状態(PermissionStatus)
+### 権限状態(HealthPermissions)
+
+データ種別(`HealthMetric`)ごとに、許可済みかどうかだけを持つ(#24 で `PermissionStatus` から一般化)。
 
 | 状態 | 意味 |
 |---|---|
-| `granted` | 読み取り権限が許可済み |
-| `denied` | 未許可(未リクエスト・拒否・取り消しを区別しない) |
+| `granted` に含まれる | その種別の読み取り権限が許可済み |
+| `granted` に含まれない | 未許可(未リクエスト・拒否・取り消しを区別しない) |
+| `noneGranted` | すべての種別が未許可(`DashboardNeedsPermission`) |
 
 ### 利用可否(HealthAvailability)
 
