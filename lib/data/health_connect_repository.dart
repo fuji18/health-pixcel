@@ -1,7 +1,9 @@
 import 'package:health/health.dart';
 import 'package:health_pixcel/data/health_repository.dart';
 import 'package:health_pixcel/data/platform_channels.dart';
+import 'package:health_pixcel/domain/heart_rate_summary.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
+import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
 
 /// [HealthRepository] の Android 実装(ヘルスコネクト。`health` パッケージ経由)。
@@ -16,6 +18,13 @@ class HealthConnectRepository implements HealthRepository {
 
   final Health _health;
   final HealthConnectSettingsChannel _settingsChannel;
+
+  /// 読み取るデータ種別と health の型の対応。
+  static const _types = {
+    HealthMetric.steps: HealthDataType.STEPS,
+    HealthMetric.sleep: HealthDataType.SLEEP_SESSION,
+    HealthMetric.heartRate: HealthDataType.HEART_RATE,
+  };
 
   // late final なので初回アクセス時に 1 度だけ configure() が走る(functional-design.md)。
   late final Future<void> _configured = _health.configure();
@@ -49,15 +58,13 @@ class HealthConnectRepository implements HealthRepository {
   });
 
   @override
-  Future<({PermissionStatus steps, PermissionStatus sleep})>
-  checkPermissions() => _guard(_readPermissions);
+  Future<HealthPermissions> checkPermissions() => _guard(_readPermissions);
 
   @override
-  Future<({PermissionStatus steps, PermissionStatus sleep})>
-  requestPermissions() => _guard(() async {
+  Future<HealthPermissions> requestPermissions() => _guard(() async {
     await _health.requestAuthorization(
-      const [HealthDataType.STEPS, HealthDataType.SLEEP_SESSION],
-      permissions: const [HealthDataAccess.READ, HealthDataAccess.READ],
+      _types.values.toList(),
+      permissions: [for (final _ in _types.values) HealthDataAccess.READ],
     );
     return _readPermissions();
   });
@@ -106,21 +113,33 @@ class HealthConnectRepository implements HealthRepository {
         ]);
       });
 
-  Future<({PermissionStatus steps, PermissionStatus sleep})>
-  _readPermissions() async {
-    // 片方だけ許可を判別するため、種別ごとに個別に問い合わせる
-    final steps = await _health.hasPermissions(
-      const [HealthDataType.STEPS],
-      permissions: const [HealthDataAccess.READ],
-    );
-    final sleep = await _health.hasPermissions(
-      const [HealthDataType.SLEEP_SESSION],
-      permissions: const [HealthDataAccess.READ],
-    );
-    return (steps: _toStatus(steps), sleep: _toStatus(sleep));
-  }
+  @override
+  Future<HeartRateStats?> readHeartRate(DateTime start, DateTime end) =>
+      _guard(() async {
+        final points = await _health.getHealthDataFromTypes(
+          types: const [HealthDataType.HEART_RATE],
+          startTime: start,
+          endTime: end,
+        );
+        // 区間をまたぐレコードは丸ごと返るため、標本の時刻で [start, end) に絞る
+        return summarizeHeartRate([
+          for (final p in points)
+            if (!p.dateFrom.isBefore(start) && p.dateFrom.isBefore(end))
+              if (p.value case NumericHealthValue(:final numericValue))
+                numericValue,
+        ]);
+      });
 
-  /// null / false は未許可として扱う。
-  static PermissionStatus _toStatus(bool? granted) =>
-      granted == true ? PermissionStatus.granted : PermissionStatus.denied;
+  Future<HealthPermissions> _readPermissions() async {
+    // 種別ごとに許可を判別するため、個別に問い合わせる。null / false は未許可
+    final granted = <HealthMetric>{};
+    for (final entry in _types.entries) {
+      final ok = await _health.hasPermissions(
+        [entry.value],
+        permissions: const [HealthDataAccess.READ],
+      );
+      if (ok == true) granted.add(entry.key);
+    }
+    return HealthPermissions(Set.unmodifiable(granted));
+  }
 }

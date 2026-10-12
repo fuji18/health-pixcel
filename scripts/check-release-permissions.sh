@@ -11,6 +11,7 @@ cd "$ROOT"
 ALLOWED_PERMISSIONS='
 android.permission.health.READ_STEPS
 android.permission.health.READ_SLEEP
+android.permission.health.READ_HEART_RATE
 io.github.fuji18.healthpixcel.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 '
 APK=build/app/outputs/flutter-apk/app-release.apk

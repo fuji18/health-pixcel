@@ -16,8 +16,13 @@ import '../../fakes/fake_health_repository.dart';
 void main() {
   final now = DateTime(2026, 10, 6, 10, 30);
   final today = DateTime(2026, 10, 6);
-  const granted = PermissionStatus.granted;
-  const denied = PermissionStatus.denied;
+  const none = HealthPermissions({});
+  const all = HealthPermissions({
+    HealthMetric.steps,
+    HealthMetric.sleep,
+    HealthMetric.heartRate,
+  });
+  const stepsOnly = HealthPermissions({HealthMetric.steps});
 
   late FakeHealthRepository fake;
   late ProviderContainer container;
@@ -70,7 +75,7 @@ void main() {
     });
 
     test('両方未許可', () async {
-      fake.permissions = (steps: denied, sleep: denied);
+      fake.permissions = none;
       await initial();
       expect(value(), isA<DashboardNeedsPermission>());
       expect(fake.stepsCalls, isEmpty);
@@ -78,12 +83,55 @@ void main() {
     });
 
     test('片方未許可', () async {
-      fake.permissions = (steps: granted, sleep: denied);
+      fake.permissions = stepsOnly;
       await initial();
       final v = value() as DashboardReady;
       expect(v.steps, isA<MetricLoaded<dynamic>>());
       expect(v.sleep, isA<MetricPermissionDenied<dynamic>>());
       expect(fake.sleepCalls, isEmpty);
+    });
+
+    test('心拍だけ未許可', () async {
+      fake.permissions = const HealthPermissions({
+        HealthMetric.steps,
+        HealthMetric.sleep,
+      });
+      await initial();
+      final v = value() as DashboardReady;
+      expect(v.steps, isA<MetricLoaded<dynamic>>());
+      expect(v.sleep, isA<MetricLoaded<dynamic>>());
+      expect(v.heartRate, isA<MetricPermissionDenied<dynamic>>());
+      expect(fake.heartRateCalls, isEmpty);
+    });
+
+    test('心拍だけ許可', () async {
+      fake.permissions = const HealthPermissions({HealthMetric.heartRate});
+      await initial();
+      final v = value() as DashboardReady;
+      expect(v.steps, isA<MetricPermissionDenied<dynamic>>());
+      expect(v.sleep, isA<MetricPermissionDenied<dynamic>>());
+      expect(v.heartRate, isA<MetricLoaded<dynamic>>());
+    });
+
+    test('心拍の読み込みが unavailable → 再確認し、available なら readFailed', () async {
+      fake.heartRateErrors[today] = HealthErrorKind.unavailable;
+      await initial();
+      final v = value() as DashboardReady;
+      expect(
+        (v.heartRate as MetricFailed<dynamic>).kind,
+        HealthErrorKind.readFailed,
+      );
+      expect(fake.checkAvailabilityCalls, 2);
+    });
+
+    test('心拍の読み込みが unavailable → 再確認で不可なら DashboardUnavailable', () async {
+      fake.heartRateErrors[today] = HealthErrorKind.unavailable;
+      fake.availabilityQueue.addAll([
+        HealthAvailability.available,
+        HealthAvailability.notInstalled,
+      ]);
+      await initial();
+      expect(value(), isA<DashboardUnavailable>());
     });
 
     test('読み取り失敗は片方だけ', () async {
@@ -166,8 +214,8 @@ void main() {
 
   group('権限リクエスト', () {
     test('許可後の自動再読み込み', () async {
-      fake.permissions = (steps: denied, sleep: denied);
-      fake.permissionsAfterRequest = (steps: granted, sleep: granted);
+      fake.permissions = none;
+      fake.permissionsAfterRequest = all;
       await initial();
       expect(value(), isA<DashboardNeedsPermission>());
       fake.readGate = Completer<void>();
@@ -207,8 +255,8 @@ void main() {
     });
 
     test('実行中の refresh() があるときの requestPermissions()', () async {
-      fake.permissions = (steps: denied, sleep: denied);
-      fake.permissionsAfterRequest = (steps: granted, sleep: granted);
+      fake.permissions = none;
+      fake.permissionsAfterRequest = all;
       await initial();
       expect(value(), isA<DashboardNeedsPermission>());
       final gate = Completer<void>();
@@ -261,7 +309,7 @@ void main() {
     });
 
     test('権限なしで終わった後、何も変えずに復帰 → 再読み込みしない', () async {
-      fake.permissions = (steps: denied, sleep: denied);
+      fake.permissions = none;
       await initial();
       expect(fake.checkAvailabilityCalls, 1);
       await controller().onResumed();
@@ -281,10 +329,28 @@ void main() {
 
     test('権限が変わった復帰で再読み込み', () async {
       await initial();
-      fake.permissions = (steps: granted, sleep: denied);
+      fake.permissions = stepsOnly;
       await controller().onResumed();
       final v = value() as DashboardReady;
       expect(v.sleep, isA<MetricPermissionDenied<dynamic>>());
+    });
+
+    test('心拍の権限だけ変わった復帰で読み直す', () async {
+      fake.permissions = stepsOnly;
+      await initial();
+      expect(
+        (value() as DashboardReady).heartRate,
+        isA<MetricPermissionDenied<dynamic>>(),
+      );
+      fake.permissions = const HealthPermissions({
+        HealthMetric.steps,
+        HealthMetric.heartRate,
+      });
+      await controller().onResumed();
+      expect(
+        (value() as DashboardReady).heartRate,
+        isA<MetricLoaded<dynamic>>(),
+      );
     });
 
     test('想定外の例外の後の復帰は必ず再読み込み', () async {

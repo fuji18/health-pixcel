@@ -46,3 +46,9 @@ String formatShortDate(DateTime date) => DateFormat('M/d', 'ja').format(date);
 
 /// 整数を `8,432` 形式にする(3 桁区切りは半角 `,`。単位なし)。
 String formatNumber(int value) => NumberFormat('#,##0', 'ja').format(value);
+
+/// 心拍を `68 bpm` 形式にする。
+String formatBpm(int bpm) => '$bpm bpm';
+
+/// 心拍の範囲を `(52〜128)` 形式にする。
+String formatBpmRange(int min, int max) => '($min〜$max)';

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:health_pixcel/data/health_repository.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
+import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
 
 /// テスト用の HealthRepository。各フィールドで戻り値・失敗・待機を差し替える。
@@ -19,10 +20,11 @@ class FakeHealthRepository implements HealthRepository {
   int checkAvailabilityCalls = 0;
 
   /// checkPermissions の戻り値。
-  ({PermissionStatus steps, PermissionStatus sleep}) permissions = (
-    steps: PermissionStatus.granted,
-    sleep: PermissionStatus.granted,
-  );
+  HealthPermissions permissions = const HealthPermissions({
+    HealthMetric.steps,
+    HealthMetric.sleep,
+    HealthMetric.heartRate,
+  });
 
   /// 非 null なら checkPermissions がこれを投げる。
   Exception? permissionsError;
@@ -34,7 +36,7 @@ class FakeHealthRepository implements HealthRepository {
   int checkPermissionsCalls = 0;
 
   /// 非 null なら requestPermissions の後に permissions をこれで置き換える。
-  ({PermissionStatus steps, PermissionStatus sleep})? permissionsAfterRequest;
+  HealthPermissions? permissionsAfterRequest;
 
   /// 非 null なら requestPermissions はこれの完了を待つ(ダイアログ表示中を表す)。
   Completer<void>? requestGate;
@@ -66,6 +68,15 @@ class FakeHealthRepository implements HealthRepository {
   /// readTotalSteps の呼び出し履歴(start, end)。
   final stepsCalls = <(DateTime, DateTime)>[];
 
+  /// 日付(00:00)→ 心拍の集計値。キーが無い日は null(記録なし)。
+  final heartRates = <DateTime, HeartRateStats>{};
+
+  /// 日付(00:00)→ その日の readHeartRate が投げる HealthReadException の種類。
+  final heartRateErrors = <DateTime, HealthErrorKind>{};
+
+  /// readHeartRate の呼び出し履歴(start, end)。
+  final heartRateCalls = <(DateTime, DateTime)>[];
+
   /// readSleepSessions の戻り値。
   List<SleepSession> sleepSessions = [];
 
@@ -75,7 +86,7 @@ class FakeHealthRepository implements HealthRepository {
   /// readSleepSessions の呼び出し履歴(start, end)。
   final sleepCalls = <(DateTime, DateTime)>[];
 
-  /// 非 null なら readTotalSteps / readSleepSessions はこれの完了を待つ(読み込み中を表す)。
+  /// 非 null なら readTotalSteps / readSleepSessions / readHeartRate はこれの完了を待つ(読み込み中を表す)。
   Completer<void>? readGate;
 
   @override
@@ -88,8 +99,7 @@ class FakeHealthRepository implements HealthRepository {
   }
 
   @override
-  Future<({PermissionStatus steps, PermissionStatus sleep})>
-  checkPermissions() async {
+  Future<HealthPermissions> checkPermissions() async {
     checkPermissionsCalls++;
     final error = permissionsError;
     if (error != null) throw error;
@@ -99,8 +109,7 @@ class FakeHealthRepository implements HealthRepository {
   }
 
   @override
-  Future<({PermissionStatus steps, PermissionStatus sleep})>
-  requestPermissions() async {
+  Future<HealthPermissions> requestPermissions() async {
     requestPermissionsCalls++;
     await requestGate?.future;
     final error = requestError;
@@ -141,5 +150,14 @@ class FakeHealthRepository implements HealthRepository {
     final kind = sleepError;
     if (kind != null) throw HealthReadException(kind);
     return sleepSessions;
+  }
+
+  @override
+  Future<HeartRateStats?> readHeartRate(DateTime start, DateTime end) async {
+    heartRateCalls.add((start, end));
+    await readGate?.future;
+    final kind = heartRateErrors[start];
+    if (kind != null) throw HealthReadException(kind);
+    return heartRates[start];
   }
 }
