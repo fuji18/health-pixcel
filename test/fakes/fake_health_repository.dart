@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:health_pixcel/data/health_repository.dart';
+import 'package:health_pixcel/domain/models/exercise_session.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
@@ -25,6 +26,7 @@ class FakeHealthRepository implements HealthRepository {
     HealthMetric.sleep,
     HealthMetric.heartRate,
     HealthMetric.weight,
+    HealthMetric.exercise,
   });
 
   /// 非 null なら checkPermissions がこれを投げる。
@@ -96,7 +98,16 @@ class FakeHealthRepository implements HealthRepository {
   /// readSleepSessions の呼び出し履歴(start, end)。
   final sleepCalls = <(DateTime, DateTime)>[];
 
-  /// 非 null なら readTotalSteps / readSleepSessions / readHeartRate / readLatestWeight はこれの完了を待つ(読み込み中を表す)。
+  /// readExerciseSessions の戻り値。
+  List<ExerciseSession> exerciseSessions = [];
+
+  /// 非 null なら readExerciseSessions が HealthReadException(exerciseError) を投げる。
+  HealthErrorKind? exerciseError;
+
+  /// readExerciseSessions の呼び出し履歴(start, end)。
+  final exerciseCalls = <(DateTime, DateTime)>[];
+
+  /// 非 null なら readTotalSteps / readSleepSessions / readHeartRate / readLatestWeight / readExerciseSessions はこれの完了を待つ(読み込み中を表す)。
   Completer<void>? readGate;
 
   @override
@@ -178,5 +189,17 @@ class FakeHealthRepository implements HealthRepository {
     final kind = weightErrors[start];
     if (kind != null) throw HealthReadException(kind);
     return weights[start];
+  }
+
+  @override
+  Future<List<ExerciseSession>> readExerciseSessions(
+    DateTime start,
+    DateTime end,
+  ) async {
+    exerciseCalls.add((start, end));
+    await readGate?.future;
+    final kind = exerciseError;
+    if (kind != null) throw HealthReadException(kind);
+    return exerciseSessions;
   }
 }

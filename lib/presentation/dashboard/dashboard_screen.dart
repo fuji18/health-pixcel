@@ -5,6 +5,7 @@ import 'package:health_pixcel/domain/models/goals.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_controller.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
+import 'package:health_pixcel/presentation/dashboard/widgets/exercise_section.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/sleep_section.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/status_message.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/heart_rate_section.dart';
@@ -104,7 +105,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ],
       DashboardNeedsPermission() => [
         StatusMessage(
-          title: '歩数・睡眠・心拍・体重を表示するには、ヘルスコネクトの読み取り権限が必要です',
+          title: '歩数・睡眠・心拍・体重・運動記録を表示するには、ヘルスコネクトの読み取り権限が必要です',
           body: 'データの読み取りのみ行い、端末の外には送信しません',
           actions: [
             StatusAction('権限を許可する', _requestPermissions),
@@ -171,6 +172,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       const Divider(height: 32),
       WeightSection(
         result: state.weight,
+        today: today,
+        onRequestPermission: _requestPermissions,
+        onOpenSettings: _openSettings,
+        onRetry: _retry,
+      ),
+      const Divider(height: 32),
+      ExerciseSection(
+        result: state.exercise,
         today: today,
         onRequestPermission: _requestPermissions,
         onOpenSettings: _openSettings,

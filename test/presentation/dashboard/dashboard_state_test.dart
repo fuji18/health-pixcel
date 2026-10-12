@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:health_pixcel/domain/date_range_builder.dart';
+import 'package:health_pixcel/domain/models/daily_exercise.dart';
 import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
 import 'package:health_pixcel/domain/models/daily_weight.dart';
 import 'package:health_pixcel/domain/models/display_period.dart';
+import 'package:health_pixcel/domain/models/exercise_session.dart';
 import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
@@ -53,6 +55,22 @@ void main() {
             isToday: i == 0,
           ),
       ]);
+  MetricLoaded<DailyExercise> exerciseOf({bool withRecordOnToday = false}) =>
+      MetricLoaded([
+        for (var i = 0; i < 7; i++)
+          DailyExercise(
+            date: range.days[i],
+            sessions: i == 0 && withRecordOnToday
+                ? [
+                    ExerciseSession(
+                      start: DateTime(2026, 10, 6, 7),
+                      end: DateTime(2026, 10, 6, 7, 45),
+                    ),
+                  ]
+                : const [],
+            isToday: i == 0,
+          ),
+      ]);
   const noSteps = <int?>[null, null, null, null, null, null, null];
 
   DashboardReady ready(
@@ -60,6 +78,7 @@ void main() {
     MetricResult<DailySleep> sleep, [
     MetricResult<DailyHeartRate> heartRate = const MetricPermissionDenied(),
     MetricResult<DailyWeight> weight = const MetricPermissionDenied(),
+    MetricResult<DailyExercise> exercise = const MetricPermissionDenied(),
   ]) => DashboardReady(
     period: DisplayPeriod.week,
     range: range,
@@ -67,6 +86,7 @@ void main() {
     sleep: sleep,
     heartRate: heartRate,
     weight: weight,
+    exercise: exercise,
   );
 
   group('isAllEmpty', () {
@@ -176,6 +196,55 @@ void main() {
           stepsOf(noSteps),
           sleepOf(),
           heartOf(),
+          const MetricPermissionDenied(),
+        ).isAllEmpty,
+        isTrue,
+      );
+    });
+
+    test('運動だけ記録あり', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          heartOf(),
+          weightOf(),
+          exerciseOf(withRecordOnToday: true),
+        ).isAllEmpty,
+        isFalse,
+      );
+    });
+    test('5 種とも全日記録なし', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          heartOf(),
+          weightOf(),
+          exerciseOf(),
+        ).isAllEmpty,
+        isTrue,
+      );
+    });
+    test('運動が MetricFailed', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          heartOf(),
+          weightOf(),
+          const MetricFailed(HealthErrorKind.readFailed),
+        ).isAllEmpty,
+        isFalse,
+      );
+    });
+    test('運動だけ未許可で他 4 種が全日記録なし', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          heartOf(),
+          weightOf(),
           const MetricPermissionDenied(),
         ).isAllEmpty,
         isTrue,

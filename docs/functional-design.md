@@ -137,6 +137,28 @@ class DailyWeight {
 - 今日も「(途中)」を付けない(最新値は累積値ではないため)
 - BMI・体脂肪率・身長は扱わない(別の権限が要るため。PRD「セキュリティ・プライバシー」)
 
+### エンティティ: ExerciseSession / DailyExercise(運動記録・日別運動)(#26)
+
+```dart
+class ExerciseSession {
+  final DateTime start;    // 開始時刻(ローカル)
+  final DateTime end;      // 終了時刻(ローカル)。start より後
+  Duration get duration;   // end - start
+}
+
+class DailyExercise {
+  final DateTime date;                    // 帰属日(開始日)の 00:00(ローカル)
+  final List<ExerciseSession> sessions;   // start の昇順。空 = 記録なし
+  final bool isToday;                     // true の場合、表示時点までの途中値
+  bool get hasRecord;                     // sessions.isNotEmpty
+  Duration get total;                     // duration の合計
+}
+```
+
+- 帰属日は開始日(A6)。日をまたぐ記録も分割しない
+- 今日は途中値のため、記録があれば「(途中)」を付ける(歩数と同じ)
+- 運動の種類・距離・消費カロリー・ルートは扱わない(距離・消費カロリーは読み取りの都合で権限だけ要る。下記 `HealthConnectRepository` と PRD「セキュリティ・プライバシー」)
+
 ### エンティティ: SleepSession(睡眠セッション)
 
 ```dart
@@ -166,8 +188,8 @@ class DailySleep {
 ### エンティティ: 取得結果と権限状態
 
 ```dart
-/// 読み取るデータの種別(権限はこの単位で扱う)。#25 体重・#26 運動記録は列挙値を足して広げる
-enum HealthMetric { steps, sleep, heartRate, weight }
+/// 読み取るデータの種別(権限はこの単位で扱う)。#25 体重・#26 運動記録で列挙値を足して広げた
+enum HealthMetric { steps, sleep, heartRate, weight, exercise }
 
 /// データ種別ごとの権限状態(許可済みの種別の集合)。値で比較できる(順序によらず集合が等しければ ==)
 class HealthPermissions {
@@ -235,6 +257,7 @@ class DashboardReady extends DashboardState {
   final MetricResult<DailySleep> sleep;
   final MetricResult<DailyHeartRate> heartRate;   // #24
   final MetricResult<DailyWeight> weight;         // #25
+  final MetricResult<DailyExercise> exercise;     // #26
 
   /// F4 のデータなし案内を出すかどうか
   bool get isAllEmpty;
@@ -242,9 +265,9 @@ class DashboardReady extends DashboardState {
 ```
 
 **`isAllEmpty` の定義**: 次の 3 条件をすべて満たすとき `true`。
-1. `steps` / `sleep` / `heartRate` / `weight` のどれも `MetricFailed` ではない
+1. `steps` / `sleep` / `heartRate` / `weight` / `exercise` のどれも `MetricFailed` ではない
 2. 少なくとも 1 つが `MetricLoaded`
-3. `MetricLoaded` であるものはすべて、期間内の全日が記録なし(歩数は `steps == null`、睡眠は `hasRecord == false`、心拍は `stats == null`、体重は `kg == null`)
+3. `MetricLoaded` であるものはすべて、期間内の全日が記録なし(歩数は `steps == null`、睡眠は `hasRecord == false`、心拍は `stats == null`、体重は `kg == null`、運動は `hasRecord == false`)
 
 `MetricPermissionDenied` の種別は判定から除外する(例: 歩数・心拍が未許可、睡眠が期間内の全日とも記録なし → `true`)。
 
@@ -288,7 +311,7 @@ abstract interface class HealthRepository {
   /// データ種別ごとの権限状態
   Future<HealthPermissions> checkPermissions();
 
-  /// 歩数・睡眠・心拍・体重の READ 権限をまとめてリクエストし、リクエスト後の状態を返す
+  /// 歩数・睡眠・心拍・体重・運動記録の READ 権限をまとめてリクエストし、リクエスト後の状態を返す
   Future<HealthPermissions> requestPermissions();
 
   /// ヘルスコネクトのアプリ権限設定画面を開く(ダイアログが出なくなった場合の逃げ道)。
@@ -309,6 +332,9 @@ abstract interface class HealthRepository {
 
   /// [start, end) の最新の体重(kg)。記録なしは null。失敗時は HealthReadException を投げる(#25)
   Future<double?> readLatestWeight(DateTime start, DateTime end);
+
+  /// [start, end) と重なる運動記録。失敗時は HealthReadException を投げる(#26)
+  Future<List<ExerciseSession>> readExerciseSessions(DateTime start, DateTime end);
 }
 
 class HealthReadException implements Exception {
@@ -326,16 +352,17 @@ class HealthReadException implements Exception {
 | メソッド | 使う `health` API | 補足 |
 |---|---|---|
 | `checkAvailability` | `getHealthConnectSdkStatus()` | `sdkAvailable` → `available`、`sdkUnavailableProviderUpdateRequired` → `updateRequired`、それ以外(`sdkUnavailable`)・`null` → `notInstalled` |
-| `checkPermissions` | `hasPermissions([STEPS])` / `hasPermissions([SLEEP_SESSION])` / `hasPermissions([HEART_RATE])` / `hasPermissions([WEIGHT])`(各 `READ`) | 種別ごとに個別に呼ぶ(一部だけ許可を判別するため)。`true` の種別だけを `HealthPermissions.granted` に入れる(`null`/`false` は未許可)。種別と `HealthDataType` の対応はクラス内の定数 `_types` に 1 か所で持つ |
-| `requestPermissions` | `requestAuthorization([STEPS, SLEEP_SESSION, HEART_RATE, WEIGHT], permissions: [READ × 4])` | 全種別をまとめてリクエストする(ヘルスコネクトの画面は 1 回で済み、許可済みの種別は許可済みとして表示される)。戻り値の bool は使わず、直後に `checkPermissions()` を呼んで種別ごとの状態を返す |
+| `checkPermissions` | `hasPermissions([型])`(各 `READ`)を下記 7 型について 1 つずつ | 型ごとに個別に呼ぶ(一部だけ許可を判別するため)。種別は**読み取りに要る型がすべて `true`** のときだけ `HealthPermissions.granted` に入れる(`null`/`false` は未許可)。種別と型の対応はクラス内の定数 `_types`(1 種別 = 型のリスト)に 1 か所で持つ: 歩数 `[STEPS]` / 睡眠 `[SLEEP_SESSION]` / 心拍 `[HEART_RATE]` / 体重 `[WEIGHT]` / 運動 `[WORKOUT, DISTANCE_DELTA, TOTAL_CALORIES_BURNED, STEPS]`(#26。理由は `readExerciseSessions` の補足) |
+| `requestPermissions` | `requestAuthorization([STEPS, SLEEP_SESSION, HEART_RATE, WEIGHT, WORKOUT, DISTANCE_DELTA, TOTAL_CALORIES_BURNED], permissions: [READ × 7])`(`_types` の型を重複なく出現順に) | 全種別をまとめてリクエストする(ヘルスコネクトの画面は 1 回で済み、許可済みの種別は許可済みとして表示される)。戻り値の bool は使わず、直後に `checkPermissions()` を呼んで種別ごとの状態を返す |
 | `openPermissionSettings` | 自作 MethodChannel `health_pixcel/health_connect_settings` の `open` | Kotlin 側の手順は `architecture.md`「ヘルスコネクトの設定画面を開く」 |
 | `openHealthConnectStore` | `installHealthConnect()` | Play ストアのヘルスコネクトのページを開く(更新にも使う)。例外が出たら `false` を返す(`health` 13.3.2 はネイティブ側の失敗を握りつぶすため、実際に `false` になるのは Dart 側で例外が出たときだけ) |
 | `readTotalSteps` | `getTotalStepsInInterval(start, end)` | ヘルスコネクトの集計 API を使うため、複数ソースの重複除外はヘルスコネクト側で行われる。`0` は記録なしとして `null` を返す。`null` は `HealthReadException(readFailed)` を投げる(`health` 13.3.2 はネイティブ側の例外を握りつぶして `null` を返し、記録なしの区間では `0` を返すため。#6 でソース確認) |
 | `readSleepSessions` | `getHealthDataFromTypes(types: [SLEEP_SESSION], startTime, endTime)` | 各 `HealthDataPoint` の `dateFrom`/`dateTo` を `toLocal()` して `SleepSession` に変換。`dateTo <= dateFrom` は破棄 |
 | `readHeartRate` | `getHealthDataFromTypes(types: [HEART_RATE], startTime, endTime)` | `HeartRateRecord` の標本 1 つが 1 データ点になる。レコードは区間をまたぐことがあり、ヘルスコネクトは区間と重なるレコードを丸ごと返すため、**標本の時刻(`dateFrom`)が `[start, end)` に入るものだけ**を `summarizeHeartRate` に渡す。`NumericHealthValue` 以外は無視。複数ソースの重複は `health` の `removeDuplicates` に任せる(ソースが異なれば両方数える。平均への影響は小さいため許容) |
 | `readLatestWeight` | `getHealthDataFromTypes(types: [WEIGHT], startTime, endTime)` | `WeightRecord` 1 件が 1 データ点(瞬間の記録。単位は `health` の既定の kg)。心拍と同じく**時刻(`dateFrom`)が `[start, end)` に入るものだけ**を `pickLatestWeight` に渡す。`NumericHealthValue` 以外は無視(#25) |
+| `readExerciseSessions` | `getHealthDataFromTypes(types: [WORKOUT], startTime, endTime)` | `ExerciseSessionRecord` 1 件が 1 データ点。`dateFrom`/`dateTo` を `toLocal()` して `ExerciseSession` に変換し、`dateTo <= dateFrom` は破棄(睡眠と同じ)。`WorkoutHealthValue`(種類・距離・消費カロリー・歩数)は読まない。**`health` 13.3.2 は WORKOUT の読み取り時に記録ごとに距離・消費カロリー・歩数を権限確認なしで読み、どれかが未許可だと例外を握りつぶして空リストを返す**ため、運動の許可は 4 型すべての許可を条件にする(未許可を「記録なし」と誤表示しないため。#26) |
 
-- `UnsupportedError`(ヘルスコネクト利用不可)→ `HealthReadException(unavailable)`、`HealthException` などその他の例外 → `HealthReadException(readFailed)`。この変換は `checkAvailability` / `checkPermissions` / `requestPermissions` / `readTotalSteps` / `readSleepSessions` / `readHeartRate` / `readLatestWeight` のすべてに適用する(上位層に `health` の例外型を漏らさない)
+- `UnsupportedError`(ヘルスコネクト利用不可)→ `HealthReadException(unavailable)`、`HealthException` などその他の例外 → `HealthReadException(readFailed)`。この変換は `checkAvailability` / `checkPermissions` / `requestPermissions` / `readTotalSteps` / `readSleepSessions` / `readHeartRate` / `readLatestWeight` / `readExerciseSessions` のすべてに適用する(上位層に `health` の例外型を漏らさない)
 - `Health` はコンストラクタ引数で差し替えられるようにする(`HealthConnectRepository({Health? health})`)。ユニットテストでフェイクを注入し、上記の変換を検証するため
 - 例外を変換するとき、元の例外メッセージやデータ点をログに出さない
 - `Health().configure()` は `HealthConnectRepository` の内部で 1 回だけ呼ぶ: フィールド `late final Future<void> _configured = _health.configure();` を持ち、各公開メソッドの先頭で `await _configured;` する(`late final` のため初回アクセス時に 1 度だけ実行される)。`main.dart` は `health` を import しない
@@ -346,7 +373,7 @@ class HealthReadException implements Exception {
 
 **責務**:
 - 今日の日付と日数(7 / 30)から `DateRange` を作る
-- リポジトリから期間の日数分を読み、`DailySteps` / `DailySleep` / `DailyHeartRate` / `DailyWeight` の N 件リストに組み立てる
+- リポジトリから期間の日数分を読み、`DailySteps` / `DailySleep` / `DailyHeartRate` / `DailyWeight` / `DailyExercise` の N 件リストに組み立てる
 - データ種別ごとに**独立に**取得し、1 種別の失敗が他の種別の表示を妨げないようにする
 
 **インターフェース**:
@@ -369,6 +396,9 @@ class WeeklySummaryService {
 
   /// loadHeartRate と同じ形で readLatestWeight を呼ぶ(#25)
   Future<MetricResult<DailyWeight>> loadWeight(DateRange range);
+
+  /// readExerciseSessions(range.oldestDay, range.now) を 1 回呼び、assignExerciseToDays で振り分ける(A6。#26)
+  Future<MetricResult<DailyExercise>> loadExercise(DateRange range);
 }
 ```
 
@@ -452,9 +482,9 @@ typedef _Snapshot = ({
 1. `checkAvailability()` が `available` 以外 → `_lastSnapshot = (availability, permissions: null)` として `DashboardUnavailable(availability)` を返す
 2. `checkPermissions()` を呼び、`_lastSnapshot = (available, permissions)` に更新する
 3. すべて未許可(`noneGranted`)→ `DashboardNeedsPermission` を返す
-4. `currentRange(dayCount: period.dayCount)` で範囲を決め、許可済みの種別だけ `loadSteps` / `loadSleep` / `loadHeartRate` / `loadWeight` を並行実行する(未許可の種別は `MetricPermissionDenied`)
+4. `currentRange(dayCount: period.dayCount)` で範囲を決め、許可済みの種別だけ `loadSteps` / `loadSleep` / `loadHeartRate` / `loadWeight` / `loadExercise` を並行実行する(未許可の種別は `MetricPermissionDenied`)
 5. いずれかが `MetricFailed(unavailable)` なら `checkAvailability()` を再確認する。`available` 以外なら `_lastSnapshot = (availability, permissions: null)` として `DashboardUnavailable(availability)` を返す。`available` のままなら該当する種別を `MetricFailed(readFailed)` に読み替えて次へ進む
-6. `DashboardReady(period, range, steps, sleep, heartRate, weight)` を返す
+6. `DashboardReady(period, range, steps, sleep, heartRate, weight, exercise)` を返す
 7. 1〜6 のどこで想定外の例外が出ても捕捉し、`_lastSnapshot = null` にしたうえで 全種別を `MetricFailed(readFailed)` にした `DashboardReady` を返す(範囲が未確定なら `currentRange(dayCount: period.dayCount)` で作る。`_lastSnapshot = null` により次の復帰で必ず再読み込みされる)。値をログに出さない
 
 **`_lastSnapshot` の不変条件**: `_fetch()` が値を返した時点で、`_lastSnapshot` はその戻り値を決めたときの利用可否・権限状態と一致している(どの出口から返った場合も)。
@@ -472,6 +502,7 @@ typedef _Snapshot = ({
 | `SleepSection` | `MetricResult<DailySleep>` と睡眠時間の目標(分。`int?`)を受け取り、同上(「目標 7時間30分」) |
 | `HeartRateSection` | `MetricResult<DailyHeartRate>` を受け取り、期間の日数分の一覧・未許可案内・エラー表示のいずれかを描画(グラフ・目標なし)。一覧の上に説明「1 日の平均(最小〜最大)」を出す(#24) |
 | `WeightSection` | `MetricResult<DailyWeight>` を受け取り、`HeartRateSection` と同じ構成で描画する(グラフ・目標なし)。一覧の上に説明「その日の最新の記録」を出す(#25) |
+| `ExerciseSection` | `MetricResult<DailyExercise>` を受け取り、`WeightSection` と同じ構成で描画する(グラフ・目標なし)。一覧の上に説明「その日に始めた運動の合計時間」を出す。値は `formatDuration(total)`、今日は後ろに「 (途中)」。未許可の案内には、運動・距離・消費カロリー・歩数のすべての許可が要ることを説明文で添える(#26) |
 | `TrendBarChart` | 日別の値を棒グラフで描く。記録なしの日は棒も下地も描かない。全日記録なしなら代替文言。グラフ全体の要約を Semantics で読ませる。`goalY` があれば目標ラインを引く |
 | `GoalMark` | 一覧の行末の達成マーク(A5 の `GoalStatus` を表示)。目標が設定されているときだけ置き、判定しない日は同じ幅の空白にして値の列を揃える |
 | `StatusMessage` | 案内・エラーの共通表示(見出し + 説明 + 操作ボタン) |
@@ -492,8 +523,8 @@ typedef _Snapshot = ({
 
 見出し「健康データの利用について」。本文は次の箇条書き:
 
-- 読み取るデータ: 歩数・睡眠(就寝・起床時刻)・心拍・体重
-- 使い道: 直近 7 日または 30 日の歩数・睡眠・心拍・体重を、このアプリの画面に表示するためだけに使います
+- 読み取るデータ: 歩数・睡眠(就寝・起床時刻)・心拍・体重・運動記録(開始・終了時刻)。運動記録の読み取りに必要なため距離・消費カロリーの許可も求めますが、それらの値は表示も保存もしません
+- 使い道: 直近 7 日または 30 日の歩数・睡眠・心拍・体重・運動時間を、このアプリの画面に表示するためだけに使います
 - 送信: データを端末の外に送信しません(このアプリはインターネットに接続する権限を持っていません)
 - 保存・書き込み: データをアプリ内に保存せず、ヘルスコネクトへの書き込みも行いません
 - 取り消し: 権限はヘルスコネクトの設定からいつでも取り消せます
@@ -660,6 +691,7 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 | 時間 | `H時間m分`。1 時間未満は `m分`、分が 0 のときは `H時間` | `7時間12分` / `45分` / `8時間` |
 | 心拍 | 平均 + 半角スペース + `bpm`、続けて範囲を `(最小〜最大)` で弱い色 | `68 bpm (52〜128)` |
 | 体重 | 小数 1 桁 + 半角スペース + `kg` | `65.3 kg` |
+| 運動 | 時間と同じ(今日は半角スペース + `(途中)`) | `1時間5分` / `45分 (途中)` |
 
 - `intl` の `ja` ロケールの日付データは、`main()` で `runApp` の前に `await initializeDateFormatting('ja')` を呼んで読み込む。テストでは `setUpAll` で同じ呼び出しを行う
 - テストの期待値の曜日は、実際の暦どおりに書く(2026-10-04 = 日、10-05 = 月、10-06 = 火)
@@ -679,6 +711,18 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 - 睡眠は日別合計の分(`total.inMinutes`。秒は切り捨てで、A4 の表示と同じ)を比べる
 - 今日の歩数は途中値のため、目標に届いていれば達成とし、届いていなければまだ判定しない。睡眠は起床日に帰属し、表示時点でその夜の睡眠は終わっているため今日も判定する
 - 達成数・達成率の集計はしない(P2「週次の振り返りサマリー」)
+
+
+### A6. 運動記録の帰属日判定(#26)
+
+**目的**: 運動記録を開始日(開始時刻のローカル日付)に振り分ける。A3 と同じく 1 件の記録を丸ごと 1 日に帰属させ、日をまたいでも分割しない(運動は始めた日のものと感じるため、睡眠の起床日とは逆に開始日を採る)
+
+1. 読み取り区間: `[range.oldestDay の 00:00, range.now]`。開始日で振り分けるため、睡眠のように 1 日前から読む必要はない
+2. 同一の `start`/`end` を持つ記録は 1 件にまとめる(書き込み元の重複対策。`sourceName` は見ない)。開始・終了が異なる重なった記録はまとめない
+3. 取得した記録を `start` のローカル日付でグループ化し、`range.days` に含まれない日付(最古日より前に開始したもの)は捨てる
+4. 各日の記録を `start` の昇順に並べ、期間の日数分すべてについて `DailyExercise` を作る(記録がない日は `sessions: []`。先頭 = 今日だけ `isToday: true`)
+
+実装は `lib/domain/exercise_assignment.dart` の `assignExerciseToDays(range, sessions)`(`assignSleepToDays` と同じ形でキーを `start` にしたもの)。
 
 ## UI設計
 
@@ -715,11 +759,17 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 │ 今日 10/6(火)   65.3 kg            │
 │ 昨日 10/5(月)   記録なし           │
 │ …(7行 / 30行。グラフなし)         │
+├────────────────────────────────┤
+│ 運動                            │
+│ その日に始めた運動の合計時間        │
+│ 今日 10/6(火)   45分 (途中)        │
+│ 昨日 10/5(月)   1時間5分           │
+│ …(7行 / 30行。グラフなし)         │
 └────────────────────────────────┘
 ```
 
 - 朝に確認することが多い(PRD ペルソナ)ため、**睡眠を上、歩数を下**に置く
-- 心拍(#24)は歩数の下にセクションとして追加する(タブにしない)。睡眠・歩数の位置を変えないため、スクロールなしで直近の歩数・睡眠が見える要件は保たれる。体重(#25)は心拍の下に同じ形で足す
+- 心拍(#24)は歩数の下にセクションとして追加する(タブにしない)。睡眠・歩数の位置を変えないため、スクロールなしで直近の歩数・睡眠が見える要件は保たれる。体重(#25)は心拍の下に、運動(#26)は体重の下に同じ形で足す
 - 期間の切り替えはデータなし案内より上に置く。起動時は常に「7 日」が選ばれている
 - 両セクションとも新しい日が上。Pixel 10 の縦画面でスクロールせずに少なくとも今日〜直近数日分が見えること
 
@@ -773,8 +823,8 @@ List<DailySleep> assignSleepToDays(DateRange range, List<SleepSession> sessions)
 | `AsyncLoading`(`isLoading`。権限リクエスト後・期間の切り替え後は前回の値を伴う) | ローディングインジケーター(期間の切り替えも隠れる) | なし |
 | `DashboardUnavailable(notInstalled)` | 「ヘルスコネクトを利用できません」+「Play ストアでヘルスコネクトの状態を確認してください」 | 「Play ストアを開く」(`openStore()`) |
 | `DashboardUnavailable(updateRequired)` | 「ヘルスコネクトの更新が必要です」 | 「ヘルスコネクトを更新する」(`openStore()`) |
-| `DashboardNeedsPermission` | 「歩数・睡眠・心拍・体重を表示するには、ヘルスコネクトの読み取り権限が必要です。データの読み取りのみ行い、端末の外には送信しません」 | 「権限を許可する」/「ヘルスコネクトの設定を開く」/「詳しく見る」(`PermissionRationaleScreen` へ) |
-| `Ready` + セクションが `MetricPermissionDenied` | そのセクション内に「[歩数/睡眠/心拍/体重] の権限が許可されていません」 | 「権限を許可する」/「ヘルスコネクトの設定を開く」 |
+| `DashboardNeedsPermission` | 「歩数・睡眠・心拍・体重・運動記録を表示するには、ヘルスコネクトの読み取り権限が必要です。データの読み取りのみ行い、端末の外には送信しません」 | 「権限を許可する」/「ヘルスコネクトの設定を開く」/「詳しく見る」(`PermissionRationaleScreen` へ) |
+| `Ready` + セクションが `MetricPermissionDenied` | そのセクション内に「[歩数/睡眠/心拍/体重/運動記録] の権限が許可されていません」(運動記録は 4 つの許可が要る旨の説明文を添える) | 「権限を許可する」/「ヘルスコネクトの設定を開く」 |
 | `AsyncError`(通常発生しない) | 「データを読み込めませんでした」 | 「再読み込み」(`refresh()`) |
 | `Ready` + セクションが `MetricFailed` | そのセクション内に「データを読み込めませんでした」 | 「再読み込み」 |
 | `Ready` + `isAllEmpty` | 画面上部に「ヘルスコネクトにデータがありません。Health Sync の同期設定を確認してください」 | 「再読み込み」(各セクションは期間の全行が「記録なし」で表示) |
@@ -804,7 +854,7 @@ MVP では健康データをファイル・データベースに保存しない�
 ## セキュリティ考慮事項
 
 - **INTERNET 権限の排除**: `android/app/src/release/AndroidManifest.xml` に `<uses-permission android:name="android.permission.INTERNET" tools:node="remove"/>` を置き、依存パッケージ経由の混入もマージ時に除去する。リリースビルドの最終マニフェストで不在を確認する(手順は `development-guidelines.md`)。デバッグ/プロファイルではホットリロード等のため INTERNET が入ってよい
-- **最小権限**: ヘルスコネクト権限は `android.permission.health.READ_STEPS` / `READ_SLEEP` / `READ_HEART_RATE`(#24)/ `READ_WEIGHT`(#25)のみ宣言する。権限を足すときは先に PRD「セキュリティ・プライバシー」に理由を書く。`health` パッケージが要求する場合を除き、`ACTIVITY_RECOGNITION` 等の追加権限は宣言しない(必要性は実装時に確認し、必要なら PRD に理由を追記する)
+- **最小権限**: ヘルスコネクト権限は `android.permission.health.READ_STEPS` / `READ_SLEEP` / `READ_HEART_RATE`(#24)/ `READ_WEIGHT`(#25)/ `READ_EXERCISE` / `READ_DISTANCE` / `READ_TOTAL_CALORIES_BURNED`(#26。距離・消費カロリーは表示しないが `health` 13.3.2 の運動記録の読み取りに要る)のみ宣言する。`READ_EXERCISE_ROUTES` は宣言しない。権限を足すときは先に PRD「セキュリティ・プライバシー」に理由を書く。`health` パッケージが要求する場合を除き、`ACTIVITY_RECOGNITION` 等の追加権限は宣言しない(必要性は実装時に確認し、必要なら PRD に理由を追記する)
 - **ログ出力の禁止**: 健康データの値(歩数・時刻・時間)を `print` / `debugPrint` / `log` に渡さない。ドメインモデルは `toString()` を実装しない。例外メッセージにも値を含めない
 - **保存・共有の禁止**: ファイル書き出し・共有シート・クリップボードコピーを実装しない
 - **権限の利用目的表示**: ヘルスコネクトの要件に従い、`ACTION_SHOW_PERMISSIONS_RATIONALE` と(Android 14 以降の)`VIEW_PERMISSION_USAGE` の表示先として `PermissionRationaleScreen` を用意する。マニフェストの具体的な記述は `architecture.md` で定義する
