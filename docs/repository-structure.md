@@ -46,12 +46,14 @@ lib/domain/
 │   ├── daily_sleep.dart          # DailySleep
 │   ├── heart_rate_stats.dart     # HeartRateStats(心拍の集計値)
 │   ├── daily_heart_rate.dart     # DailyHeartRate
+│   ├── daily_weight.dart         # DailyWeight
 │   ├── metric_result.dart        # MetricResult / MetricLoaded / MetricPermissionDenied / MetricFailed
 │   ├── goals.dart                # Goals(目標値)
 │   └── health_status.dart        # HealthMetric / HealthPermissions / HealthAvailability / HealthErrorKind / LaunchAction
 ├── date_range_builder.dart       # buildDateRange / nextDay(機能設計書 A1)
 ├── sleep_assignment.dart         # assignSleepToDays(A3)
 ├── heart_rate_summary.dart       # summarizeHeartRate(心拍の標本 → 集計値)
+├── weight_summary.dart           # pickLatestWeight(体重の記録 → 最新値)
 ├── goal_input.dart               # 目標値の範囲・入力の解析と検証(parseStepsGoal / parseSleepGoal)
 ├── trend_summary.dart            # 推移グラフの読み上げ要約・縦軸上限
 └── formatters.dart               # 日付・歩数・時刻・時間のフォーマット(A4)
@@ -110,6 +112,7 @@ lib/presentation/
 │       ├── heart_rate_section.dart   # HeartRateSection
 │       ├── sleep_section.dart        # SleepSection
 │       ├── steps_section.dart        # StepsSection
+│       ├── weight_section.dart       # WeightSection
 │       ├── status_message.dart       # StatusMessage(案内・エラーの共通表示)
 │       └── trend_bar_chart.dart      # TrendBarChart
 ├── goals/
@@ -226,7 +229,7 @@ scripts/
 - 判定(`uses-permission` を許可リストと照合):
   - `android.permission.INTERNET` があれば `exit 1`(最重要。メッセージで明示する)
   - 許可リストにない権限があれば、その名前を出して `exit 1`
-  - 許可リスト: `android.permission.health.READ_STEPS` / `android.permission.health.READ_SLEEP` / `android.permission.health.READ_HEART_RATE` / `io.github.fuji18.healthpixcel.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`(androidx が自動で付けるアプリ内部用の権限)
+  - 許可リスト: `android.permission.health.READ_STEPS` / `android.permission.health.READ_SLEEP` / `android.permission.health.READ_HEART_RATE` / `android.permission.health.READ_WEIGHT` / `io.github.fuji18.healthpixcel.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`(androidx が自動で付けるアプリ内部用の権限)
   - すべて許可リスト内なら `exit 0`
 - 許可リストはスクリプト冒頭の配列で定義する。変更するときは PRD「セキュリティ・プライバシー」に理由を書いてから変える
 
@@ -343,7 +346,7 @@ presentation ──→ application ──→ domain
 |---|---|---|
 | 既存画面への項目追加 | 既存ファイルに追加 | 歩数セクションに目標値の表示を追加 |
 | 新しい画面 | `lib/presentation/<機能>/` を新設 | P1 のグラフ画面 → `lib/presentation/trends/` |
-| 新しいデータ型 | `lib/domain/models/` にモデル追加 + `HealthRepository` にメソッド追加 | P1 の心拍 → `daily_heart_rate.dart`(#24。権限は `HealthMetric` に列挙値を足す) |
+| 新しいデータ型 | `lib/domain/models/` にモデル追加 + `HealthRepository` にメソッド追加 | P1 の心拍 → `daily_heart_rate.dart`(#24。権限は `HealthMetric` に列挙値を足す)、体重 → `daily_weight.dart`(#25) |
 | 保存データの導入 | `lib/data/` に `goal_repository.dart`(抽象)+ `shared_preferences_goal_repository.dart`(実装)を追加 | P1 の目標設定 |
 | iOS 対応 | `lib/data/apple_health_repository.dart` + `ios/` | P2 |
 

@@ -12,7 +12,7 @@ PRD の最重要要件。**他のすべての規約に優先する。**
 | `toString()` を実装しない | ドメインモデル(`DailySteps` 等)に値を含む `toString()` を書く | レビュー |
 | 外部へ送らない | `http` / `dio` 等の通信パッケージ、アナリティクス・クラッシュレポート SDK、`google_fonts` 等の実行時ダウンロードを追加する | 依存追加時の審査 + `scripts/check-release-permissions.sh` |
 | 保存・共有しない(MVP) | ファイル書き出し、`shared_preferences` 等への健康データ保存、共有シート、クリップボードコピー | `scripts/check-privacy.sh` + レビュー |
-| 権限を増やさない | 許可リスト(`READ_STEPS` / `READ_SLEEP` / `READ_HEART_RATE`)以外の権限をマニフェストに追加する(必要になったら PRD に理由を書いてから) | `scripts/check-release-permissions.sh`(許可リスト照合) |
+| 権限を増やさない | 許可リスト(`READ_STEPS` / `READ_SLEEP` / `READ_HEART_RATE` / `READ_WEIGHT`)以外の権限をマニフェストに追加する(必要になったら PRD に理由を書いてから) | `scripts/check-release-permissions.sh`(許可リスト照合) |
 
 ```dart
 // ❌ 悪い例: 値がログに残る

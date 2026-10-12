@@ -22,8 +22,9 @@ health-pixcel のドキュメントとコードで使う用語の定義。**ド�
 | 記録なし | `null`(歩数)/ 空の `sessions`(睡眠) | ドメイン用語 |
 | 取得結果 | `MetricResult` | ステータス・状態 |
 | 権限状態 | `HealthPermissions`(許可済みの `HealthMetric` の集合) | ステータス・状態 |
-| データ種別 | `HealthMetric`(`steps` / `sleep` / `heartRate`) | ドメイン用語 |
+| データ種別 | `HealthMetric`(`steps` / `sleep` / `heartRate` / `weight`) | ドメイン用語 |
 | 日別心拍 | `DailyHeartRate`(`HeartRateStats` = 平均・最小・最大) | データモデル用語 |
+| 日別体重 | `DailyWeight`(その日の最新の記録。kg) | データモデル用語 |
 | 利用可否 | `HealthAvailability` | ステータス・状態 |
 | 画面状態 | `DashboardState`(`DashboardUnavailable` / `DashboardNeedsPermission` / `DashboardReady`) | ステータス・状態 |
 | 読み込み中 | `AsyncLoading`(Riverpod) | ステータス・状態 |
