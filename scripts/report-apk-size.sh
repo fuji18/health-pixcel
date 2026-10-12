@@ -24,10 +24,10 @@ if ! command -v unzip >/dev/null 2>&1; then
 fi
 
 # 3. 全体サイズ
-TOTAL=$(wc -c <"$APK" | tr -d ' ')
+TOTAL=$(wc -c <"$APK" | tr -d ' ') || { echo "APK のサイズを取得できません: $APK" >&2; exit 2; }
 
 # 4・5. エントリ一覧を区分ごとに集計(出力: "種別<TAB>キー<TAB>表示名<TAB>バイト")
-ENTRIES=$(unzip -v "$APK")
+ENTRIES=$(unzip -v "$APK") || { echo "unzip -v に失敗しました: $APK" >&2; exit 2; }
 SUMMARY=$(printf '%s\n' "$ENTRIES" | awk '
   NF >= 8 && $1 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ {
     name = $8
@@ -61,7 +61,7 @@ SUMMARY=$(printf '%s\n' "$ENTRIES" | awk '
     printf "A\t-\tリソース\t%d\n", res
     printf "A\t-\tその他\t%d\n", other
   }
-')
+') || { echo "エントリの集計に失敗しました: $APK" >&2; exit 2; }
 
 # 6. arm64-v8a の存在
 if ! printf '%s\n' "$SUMMARY" | awk -F'\t' '$1 == "N" && $2 == "arm64-v8a" { f = 1 } END { exit f ? 0 : 1 }'; then
@@ -70,7 +70,7 @@ if ! printf '%s\n' "$SUMMARY" | awk -F'\t' '$1 == "N" && $2 == "arm64-v8a" { f =
 fi
 
 # 7. arm64-v8a 相当
-OTHER_ABI=$(printf '%s\n' "$SUMMARY" | awk -F'\t' '$1 == "N" && $2 != "arm64-v8a" { s += $4 } END { printf "%d", s }')
+OTHER_ABI=$(printf '%s\n' "$SUMMARY" | awk -F'\t' '$1 == "N" && $2 != "arm64-v8a" { s += $4 } END { printf "%d", s }') || { echo "ABI 別サイズの集計に失敗しました: $APK" >&2; exit 2; }
 ARM=$((TOTAL - OTHER_ABI))
 
 # 8. 出力

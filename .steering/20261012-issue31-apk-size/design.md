@@ -137,3 +137,12 @@ devcontainer には Android SDK が無くリリースビルドできないため
 6. CI ステップの YAML は `python3 -c 'import yaml,sys; yaml.safe_load(open(".github/workflows/ci.yml"))'` で構文を確認する(PyYAML が無ければ省略してよい)
 
 スクリプトのテストはリポジトリにコミットしない(既存の `scripts/check-*.sh` と同じ扱い)。
+
+## 検収指摘による追加(code-reviewer 1 回目。Should 1〜4 を採用)
+
+1. `scripts/report-apk-size.sh` を git 上でも実行可能にする: `git add --chmod=+x scripts/report-apk-size.sh`(他の `check-*.sh` は 100755)。コミットは司令塔が行うので、index への反映までで止める
+2. `unzip -v` の失敗(壊れた APK、警告での終了コード 1 を含む)を `exit 2` に寄せる。`ENTRIES=$(unzip -v "$APK") || { echo "unzip -v に失敗しました: $APK" >&2; exit 2; }`。CI では終了コード 1 が「目安超過」の警告に化けるため
+3. `TOTAL=$(wc -c <"$APK" | tr -d ' ')` も同様に失敗時 `exit 2`(`|| { echo "APK のサイズを取得できません: $APK" >&2; exit 2; }`)。awk による集計(`SUMMARY=...` / `OTHER_ABI=...`)も同じ形で失敗時 `exit 2` にする。**`exit 1` を返すのは手順 9 の目安超過だけ**、という不変条件を守る
+4. `docs/repository-structure.md` の `report-apk-size.sh` の仕様に「`unzip` が要る。Windows の Git Bash に無い場合は CI のジョブサマリーで見る(ローカルでの実行は任意)」の 1 行を足す
+
+検証: 壊れた APK(`printf 'not a zip' > app-release.apk`)で `exit 2` になること、既存の偽 APK の確認(exit 0 / 1 / 2)が引き続き通ること。

@@ -29,6 +29,8 @@
 - [x] design.md「検証方法」1〜5 で偽 APK を使って確かめる(exit 0 / 1 / 2 と区分の集計)
 - [x] `.github/workflows/ci.yml` に `Release APK size report` ステップを design.md どおりに追加し、検証方法 6 で構文を確かめる
 
+- [x] design.md「検収指摘による追加」1〜4 を反映し、その「検証」を行う
+
 ## フェーズ2: ドキュメント(実装者)
 
 - [x] `docs/repository-structure.md` に配置ファイルと「`report-apk-size.sh` の仕様」を追加する
