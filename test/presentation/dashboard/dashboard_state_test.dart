@@ -3,6 +3,7 @@ import 'package:health_pixcel/domain/date_range_builder.dart';
 import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
+import 'package:health_pixcel/domain/models/daily_weight.dart';
 import 'package:health_pixcel/domain/models/display_period.dart';
 import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
@@ -43,18 +44,29 @@ void main() {
             isToday: i == 0,
           ),
       ]);
+  MetricLoaded<DailyWeight> weightOf({bool withRecordOnToday = false}) =>
+      MetricLoaded([
+        for (var i = 0; i < 7; i++)
+          DailyWeight(
+            date: range.days[i],
+            kg: i == 0 && withRecordOnToday ? 65.3 : null,
+            isToday: i == 0,
+          ),
+      ]);
   const noSteps = <int?>[null, null, null, null, null, null, null];
 
   DashboardReady ready(
     MetricResult<DailySteps> steps,
     MetricResult<DailySleep> sleep, [
     MetricResult<DailyHeartRate> heartRate = const MetricPermissionDenied(),
+    MetricResult<DailyWeight> weight = const MetricPermissionDenied(),
   ]) => DashboardReady(
     period: DisplayPeriod.week,
     range: range,
     steps: steps,
     sleep: sleep,
     heartRate: heartRate,
+    weight: weight,
   );
 
   group('isAllEmpty', () {
@@ -124,6 +136,46 @@ void main() {
         ready(
           stepsOf(noSteps),
           sleepOf(),
+          const MetricPermissionDenied(),
+        ).isAllEmpty,
+        isTrue,
+      );
+    });
+
+    test('体重だけ記録あり', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          heartOf(),
+          weightOf(withRecordOnToday: true),
+        ).isAllEmpty,
+        isFalse,
+      );
+    });
+    test('4 種とも全日記録なし', () {
+      expect(
+        ready(stepsOf(noSteps), sleepOf(), heartOf(), weightOf()).isAllEmpty,
+        isTrue,
+      );
+    });
+    test('体重が MetricFailed', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          heartOf(),
+          const MetricFailed(HealthErrorKind.readFailed),
+        ).isAllEmpty,
+        isFalse,
+      );
+    });
+    test('体重だけ未許可で他 3 種が全日記録なし', () {
+      expect(
+        ready(
+          stepsOf(noSteps),
+          sleepOf(),
+          heartOf(),
           const MetricPermissionDenied(),
         ).isAllEmpty,
         isTrue,

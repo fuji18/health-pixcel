@@ -3,11 +3,12 @@ import 'package:health_pixcel/domain/date_range_builder.dart';
 import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
+import 'package:health_pixcel/domain/models/daily_weight.dart';
 import 'package:health_pixcel/domain/models/date_range.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/domain/sleep_assignment.dart';
 
-/// 直近 N 日(7 / 30)の歩数・睡眠・心拍を組み立てる(機能設計書「WeeklySummaryService」)。
+/// 直近 N 日(7 / 30)の歩数・睡眠・心拍・体重を組み立てる(機能設計書「WeeklySummaryService」)。
 class WeeklySummaryService {
   /// リポジトリと時計から作る。
   WeeklySummaryService(this._repository, this._clock);
@@ -76,6 +77,27 @@ class WeeklySummaryService {
               stats: values[i],
               isToday: i == 0,
             ),
+        ]),
+      );
+    } on HealthReadException catch (e) {
+      return MetricFailed(e.kind);
+    }
+  }
+
+  /// 期間の日数分の体重。1 日でも [HealthReadException] が出たら [MetricFailed]。
+  Future<MetricResult<DailyWeight>> loadWeight(DateRange range) async {
+    try {
+      final values = await Future.wait([
+        for (var i = 0; i < range.days.length; i++)
+          _repository.readLatestWeight(
+            range.days[i],
+            i == 0 ? range.now : nextDay(range.days[i]),
+          ),
+      ]);
+      return MetricLoaded(
+        List<DailyWeight>.unmodifiable([
+          for (var i = 0; i < range.days.length; i++)
+            DailyWeight(date: range.days[i], kg: values[i], isToday: i == 0),
         ]),
       );
     } on HealthReadException catch (e) {

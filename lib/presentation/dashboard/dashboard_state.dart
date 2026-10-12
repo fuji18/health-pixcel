@@ -1,6 +1,7 @@
 import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
+import 'package:health_pixcel/domain/models/daily_weight.dart';
 import 'package:health_pixcel/domain/models/date_range.dart';
 import 'package:health_pixcel/domain/models/display_period.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
@@ -32,6 +33,7 @@ class DashboardReady extends DashboardState {
     required this.steps,
     required this.sleep,
     required this.heartRate,
+    required this.weight,
   });
 
   /// 表示期間。range.days.length == period.dayCount。
@@ -49,19 +51,25 @@ class DashboardReady extends DashboardState {
   /// 心拍の取得結果。
   final MetricResult<DailyHeartRate> heartRate;
 
+  /// 体重の取得結果。
+  final MetricResult<DailyWeight> weight;
+
   /// F4 のデータなし案内を出すかどうか(機能設計書「isAllEmpty の定義」)。
   bool get isAllEmpty {
     final steps = this.steps;
     final sleep = this.sleep;
     final heartRate = this.heartRate;
+    final weight = this.weight;
     if (steps is MetricFailed ||
         sleep is MetricFailed ||
-        heartRate is MetricFailed) {
+        heartRate is MetricFailed ||
+        weight is MetricFailed) {
       return false;
     }
     if (steps is! MetricLoaded<DailySteps> &&
         sleep is! MetricLoaded<DailySleep> &&
-        heartRate is! MetricLoaded<DailyHeartRate>) {
+        heartRate is! MetricLoaded<DailyHeartRate> &&
+        weight is! MetricLoaded<DailyWeight>) {
       return false;
     }
     final stepsEmpty = switch (steps) {
@@ -80,6 +88,10 @@ class DashboardReady extends DashboardState {
       ),
       _ => true,
     };
-    return stepsEmpty && sleepEmpty && heartRateEmpty;
+    final weightEmpty = switch (weight) {
+      MetricLoaded<DailyWeight>(:final days) => days.every((d) => d.kg == null),
+      _ => true,
+    };
+    return stepsEmpty && sleepEmpty && heartRateEmpty && weightEmpty;
   }
 }

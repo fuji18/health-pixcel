@@ -88,4 +88,12 @@ void main() {
       expect(formatBpmRange(52, 128), '(52〜128)');
     });
   });
+
+  group('formatKg', () {
+    test('小数 1 桁', () {
+      expect(formatKg(65.0), '65.0 kg');
+      expect(formatKg(65.34), '65.3 kg');
+      expect(formatKg(65.36), '65.4 kg');
+    });
+  });
 }

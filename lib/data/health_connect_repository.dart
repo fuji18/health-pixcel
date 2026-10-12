@@ -5,6 +5,7 @@ import 'package:health_pixcel/domain/heart_rate_summary.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
+import 'package:health_pixcel/domain/weight_summary.dart';
 
 /// [HealthRepository] の Android 実装(ヘルスコネクト。`health` パッケージ経由)。
 class HealthConnectRepository implements HealthRepository {
@@ -24,6 +25,7 @@ class HealthConnectRepository implements HealthRepository {
     HealthMetric.steps: HealthDataType.STEPS,
     HealthMetric.sleep: HealthDataType.SLEEP_SESSION,
     HealthMetric.heartRate: HealthDataType.HEART_RATE,
+    HealthMetric.weight: HealthDataType.WEIGHT,
   };
 
   // late final なので初回アクセス時に 1 度だけ configure() が走る(functional-design.md)。
@@ -127,6 +129,23 @@ class HealthConnectRepository implements HealthRepository {
             if (!p.dateFrom.isBefore(start) && p.dateFrom.isBefore(end))
               if (p.value case NumericHealthValue(:final numericValue))
                 numericValue,
+        ]);
+      });
+
+  @override
+  Future<double?> readLatestWeight(DateTime start, DateTime end) =>
+      _guard(() async {
+        final points = await _health.getHealthDataFromTypes(
+          types: const [HealthDataType.WEIGHT],
+          startTime: start,
+          endTime: end,
+        );
+        // 心拍と同じく、記録の時刻で [start, end) に絞る
+        return pickLatestWeight([
+          for (final p in points)
+            if (!p.dateFrom.isBefore(start) && p.dateFrom.isBefore(end))
+              if (p.value case NumericHealthValue(:final numericValue))
+                (at: p.dateFrom, kg: numericValue),
         ]);
       });
 

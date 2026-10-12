@@ -24,6 +24,7 @@ class FakeHealthRepository implements HealthRepository {
     HealthMetric.steps,
     HealthMetric.sleep,
     HealthMetric.heartRate,
+    HealthMetric.weight,
   });
 
   /// 非 null なら checkPermissions がこれを投げる。
@@ -77,6 +78,15 @@ class FakeHealthRepository implements HealthRepository {
   /// readHeartRate の呼び出し履歴(start, end)。
   final heartRateCalls = <(DateTime, DateTime)>[];
 
+  /// 日付(00:00)→ 体重(kg)。キーが無い日は null(記録なし)。
+  final weights = <DateTime, double>{};
+
+  /// 日付(00:00)→ その日の readLatestWeight が投げる HealthReadException の種類。
+  final weightErrors = <DateTime, HealthErrorKind>{};
+
+  /// readLatestWeight の呼び出し履歴(start, end)。
+  final weightCalls = <(DateTime, DateTime)>[];
+
   /// readSleepSessions の戻り値。
   List<SleepSession> sleepSessions = [];
 
@@ -86,7 +96,7 @@ class FakeHealthRepository implements HealthRepository {
   /// readSleepSessions の呼び出し履歴(start, end)。
   final sleepCalls = <(DateTime, DateTime)>[];
 
-  /// 非 null なら readTotalSteps / readSleepSessions / readHeartRate はこれの完了を待つ(読み込み中を表す)。
+  /// 非 null なら readTotalSteps / readSleepSessions / readHeartRate / readLatestWeight はこれの完了を待つ(読み込み中を表す)。
   Completer<void>? readGate;
 
   @override
@@ -159,5 +169,14 @@ class FakeHealthRepository implements HealthRepository {
     final kind = heartRateErrors[start];
     if (kind != null) throw HealthReadException(kind);
     return heartRates[start];
+  }
+
+  @override
+  Future<double?> readLatestWeight(DateTime start, DateTime end) async {
+    weightCalls.add((start, end));
+    await readGate?.future;
+    final kind = weightErrors[start];
+    if (kind != null) throw HealthReadException(kind);
+    return weights[start];
   }
 }

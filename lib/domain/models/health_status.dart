@@ -1,5 +1,5 @@
 /// 読み取るデータの種別(権限はこの単位で扱う)。
-enum HealthMetric { steps, sleep, heartRate }
+enum HealthMetric { steps, sleep, heartRate, weight }
 
 /// データ種別ごとの権限状態(許可済みの種別の集合)。値で比較できる。
 class HealthPermissions {

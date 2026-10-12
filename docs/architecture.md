@@ -40,7 +40,7 @@
 | フォーマット検査 | `dart format --output=none --set-exit-if-changed .` |
 | テスト | `flutter test` |
 | リリースビルド | `flutter build apk --release` |
-| リリース APK の権限検査 | `bash scripts/check-release-permissions.sh`(最終 APK の権限一覧を許可リストと照合。`INTERNET` が無いこと・ヘルスコネクト権限が許可リスト(`READ_STEPS` / `READ_SLEEP` / `READ_HEART_RATE`)の範囲内であることを確認。仕様は `repository-structure.md`) |
+| リリース APK の権限検査 | `bash scripts/check-release-permissions.sh`(最終 APK の権限一覧を許可リストと照合。`INTERNET` が無いこと・ヘルスコネクト権限が許可リスト(`READ_STEPS` / `READ_SLEEP` / `READ_HEART_RATE` / `READ_WEIGHT`)の範囲内であることを確認。仕様は `repository-structure.md`) |
 | レイヤー検査 | `bash scripts/check-layer-imports.sh` |
 | プライバシー検査 | `bash scripts/check-privacy.sh`(`lib/` 内のログ出力・ファイル入出力・クリップボード・共有の使用を検出) |
 
@@ -166,6 +166,7 @@ domain       → (なし。dart:core と intl のみ)
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
     <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>  <!-- #24。理由は PRD「セキュリティ・プライバシー」 -->
+    <uses-permission android:name="android.permission.health.READ_WEIGHT"/>  <!-- #25。同上 -->
 
     <!-- ヘルスコネクトの状態確認(getSdkStatus)と権限の利用目的表示。health パッケージの README の指定どおり -->
     <queries>
@@ -287,7 +288,7 @@ domain       → (なし。dart:core と intl のみ)
 | 対策 | 実現方法 | 検証方法 |
 |---|---|---|
 | 外部送信の不能化 | リリースマニフェストで `INTERNET` を除去(上記) | リリースビルドごとに `scripts/check-release-permissions.sh` と APK Analyzer で確認 |
-| 最小権限 | ヘルスコネクトは `READ_STEPS` / `READ_SLEEP` / `READ_HEART_RATE` のみ宣言(追加の理由は PRD「セキュリティ・プライバシー」)。書き込み権限なし | `scripts/check-release-permissions.sh`(許可リスト照合) |
+| 最小権限 | ヘルスコネクトは `READ_STEPS` / `READ_SLEEP` / `READ_HEART_RATE` / `READ_WEIGHT` のみ宣言(追加の理由は PRD「セキュリティ・プライバシー」)。書き込み権限なし | `scripts/check-release-permissions.sh`(許可リスト照合) |
 | クラウドバックアップの遮断 | `android:allowBackup="false"` | マニフェスト確認 |
 | ログへの非出力 | 健康データの値をログ関数に渡さない。ドメインモデルに `toString()` を実装しない | `avoid_print`(`print` のみ検出)+ `scripts/check-privacy.sh`(`debugPrint` / `dart:developer` 等を検出)+ レビュー + 実機での logcat 確認 |
 | 保存・共有の禁止 | ファイル書き出し・共有・クリップボードの実装をしない | `scripts/check-privacy.sh`(`dart:io` / `Clipboard` / 共有系パッケージを検出)+ レビュー |
@@ -320,7 +321,7 @@ domain       → (なし。dart:core と intl のみ)
 
 | 拡張(PRD) | 拡張ポイント |
 |---|---|
-| P1 心拍・体重・運動記録 | `HealthMetric` に列挙値を足し、`HealthConnectRepository._types` に対応する `HealthDataType` を足すと、権限の確認・リクエスト・一部未許可の案内が広がる(#24 で一般化)。そのうえで `HealthRepository` に読み取りメソッド、`WeeklySummaryService` に `load*`、`DashboardReady` にフィールド、画面にセクションを足し、マニフェストと許可リストに `READ_*` 権限を追加する(先に PRD に理由を書く) |
+| P1 心拍・体重・運動記録 | `HealthMetric` に列挙値を足し、`HealthConnectRepository._types` に対応する `HealthDataType` を足すと、権限の確認・リクエスト・一部未許可の案内が広がる(#24 で一般化。#25 の体重はこの手順の横展開)。そのうえで `HealthRepository` に読み取りメソッド、`WeeklySummaryService` に `load*`、`DashboardReady` にフィールド、画面にセクションを足し、マニフェストと許可リストに `READ_*` 権限を追加する(先に PRD に理由を書く) |
 | P1 週・月の期間切り替え | `buildDateRange` を日数を引数に取る形へ一般化し、期間(`DisplayPeriod`)を `DashboardController` が持つ(#20 で実装) |
 | P1 グラフ | プレゼンテーション層にウィジェットを追加。ライブラリは `fl_chart`(確定) |
 | P1 目標設定 | 初めての保存データ。`shared_preferences`(確定)。「P1 以降で保存が必要になった場合」に従う |
