@@ -264,7 +264,7 @@ scripts/
 - 前提: `flutter build apk --release` 実行済み。対象は `build/app/outputs/flutter-apk/app-release.apk`(fat APK。追加ビルドはしない)
 - 標準出力に Markdown(APK 全体のサイズ・arm64-v8a 相当サイズ・区分ごとの内訳)を出す。CI ではジョブサマリーに追記する
 - 終了コード: `0` = 目安以内 / `1` = 目安超過(CI では `::warning::` にするだけで落とさない)/ `2` = 検査不能(APK が無い・`unzip` が無い・`lib/arm64-v8a/` が無い)
-- 主指標の arm64-v8a 相当 = APK のファイルサイズ −(`lib/<abi>/` のうち arm64-v8a 以外のエントリの圧縮後サイズの合計)。目安は `BUDGET_MB=25`(スクリプト冒頭の定数。変えるときは `architecture.md`「パフォーマンス要件」も直す)
+- 主指標の arm64-v8a 相当 = APK のファイルサイズ −(`lib/<abi>/` のうち arm64-v8a 以外のエントリの圧縮後サイズの合計)。目安は `BUDGET_MB=20`(スクリプト冒頭の定数。変えるときは `architecture.md`「パフォーマンス要件」も直す)
 - 単位は MB = 1,048,576 バイト(小数 1 桁)とバイト数。区分の値はすべて圧縮後サイズ
 - `unzip` が要る。Windows の Git Bash に無い場合は CI のジョブサマリーで見る(ローカルでの実行は任意)
 - `unzip -v` のエントリを次の順で最初に一致した区分に振り分けて合計する:

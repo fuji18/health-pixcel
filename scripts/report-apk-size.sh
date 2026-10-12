@@ -8,7 +8,7 @@ ROOT=${CHECK_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}
 cd "$ROOT"
 
 # 目安(arm64-v8a 相当、MB)。変えるときは docs/architecture.md「パフォーマンス要件」も合わせて直す
-BUDGET_MB=25
+BUDGET_MB=20
 APK=build/app/outputs/flutter-apk/app-release.apk
 
 # 1. APK の存在
