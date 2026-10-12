@@ -215,7 +215,8 @@ flutter create --project-name health_pixcel --org io.github.fuji18 --platforms=a
 scripts/
 ├── check-release-permissions.sh   # リリース APK の権限を許可リストと照合
 ├── check-layer-imports.sh         # レイヤー間の import 禁止ルールを検査
-└── check-privacy.sh               # lib/ 内のログ出力・ファイル入出力・共有の使用を検出
+├── check-privacy.sh               # lib/ 内のログ出力・ファイル入出力・共有の使用を検出
+└── report-apk-size.sh             # リリース APK のサイズと内訳を出す(目安超過は警告)
 ```
 
 すべて POSIX シェルで書き、Git Bash(Windows)と ubuntu(CI)の両方で動かす。
@@ -258,6 +259,26 @@ scripts/
 - ロガー: `package:logging/` / `package:logger/`
 - `toString()` の実装: `lib/domain/` 内の `String toString()`
 - 例外: どうしても必要な行は行末に `// privacy-check: allow(<理由>)` を書くと除外される。使ったら PR 本文で理由を説明する
+
+**`report-apk-size.sh` の仕様**(報告用。`unzip` が要る。鮮度検査はしない):
+- 前提: `flutter build apk --release` 実行済み。対象は `build/app/outputs/flutter-apk/app-release.apk`(fat APK。追加ビルドはしない)
+- 標準出力に Markdown(APK 全体のサイズ・arm64-v8a 相当サイズ・区分ごとの内訳)を出す。CI ではジョブサマリーに追記する
+- 終了コード: `0` = 目安以内 / `1` = 目安超過(CI では `::warning::` にするだけで落とさない)/ `2` = 検査不能(APK が無い・`unzip` が無い・`lib/arm64-v8a/` が無い)
+- 主指標の arm64-v8a 相当 = APK のファイルサイズ −(`lib/<abi>/` のうち arm64-v8a 以外のエントリの圧縮後サイズの合計)。目安は `BUDGET_MB=25`(スクリプト冒頭の定数。変えるときは `architecture.md`「パフォーマンス要件」も直す)
+- 単位は MB = 1,048,576 バイト(小数 1 桁)とバイト数。区分の値はすべて圧縮後サイズ
+- `unzip -v` のエントリを次の順で最初に一致した区分に振り分けて合計する:
+
+  | 区分 | 一致条件(名前) |
+  |---|---|
+  | `Dart AOT(<abi>)` | `lib/<abi>/libapp.so` |
+  | `Flutter エンジン(<abi>)` | `lib/<abi>/libflutter.so` |
+  | `その他ネイティブ(<abi>)` | `lib/<abi>/` 配下のそれ以外 |
+  | `Flutter アセット` | `assets/flutter_assets/` で始まる |
+  | `DEX` | `classes*.dex`(ルート直下) |
+  | `リソース` | `res/` で始まる、または `resources.arsc` |
+  | `その他` | 上のいずれでもない |
+
+  `<abi>` は `lib/` の次のパス要素(決め打ちしない)。表の行順は ABI ごと(昇順)に Dart AOT → エンジン → その他ネイティブ、続けてアセット → DEX → リソース → その他(合計 0 のネイティブ区分は出さない)
 
 ### docs/(ドキュメント)
 

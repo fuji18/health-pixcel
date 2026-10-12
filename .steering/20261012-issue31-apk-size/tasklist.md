@@ -25,14 +25,14 @@
 
 ## フェーズ1: スクリプトと CI(実装者)
 
-- [ ] `scripts/report-apk-size.sh` を design.md「`scripts/report-apk-size.sh` の仕様」どおりに作る
-- [ ] design.md「検証方法」1〜5 で偽 APK を使って確かめる(exit 0 / 1 / 2 と区分の集計)
-- [ ] `.github/workflows/ci.yml` に `Release APK size report` ステップを design.md どおりに追加し、検証方法 6 で構文を確かめる
+- [x] `scripts/report-apk-size.sh` を design.md「`scripts/report-apk-size.sh` の仕様」どおりに作る
+- [x] design.md「検証方法」1〜5 で偽 APK を使って確かめる(exit 0 / 1 / 2 と区分の集計)
+- [x] `.github/workflows/ci.yml` に `Release APK size report` ステップを design.md どおりに追加し、検証方法 6 で構文を確かめる
 
 ## フェーズ2: ドキュメント(実装者)
 
-- [ ] `docs/repository-structure.md` に配置ファイルと「`report-apk-size.sh` の仕様」を追加する
-- [ ] `docs/development-guidelines.md` の「作成前のチェック」と「品質の自動化」を design.md どおりに更新する
+- [x] `docs/repository-structure.md` に配置ファイルと「`report-apk-size.sh` の仕様」を追加する
+- [x] `docs/development-guidelines.md` の「作成前のチェック」と「品質の自動化」を design.md どおりに更新する
 
 ## フェーズ3: 実測と目安の決定(司令塔が行う。実装者は触らない)
 
