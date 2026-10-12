@@ -52,3 +52,6 @@ String formatBpm(int bpm) => '$bpm bpm';
 
 /// 心拍の範囲を `(52〜128)` 形式にする。
 String formatBpmRange(int min, int max) => '($min〜$max)';
+
+/// 体重を `65.3 kg` 形式(小数 1 桁)にする。
+String formatKg(double kg) => '${kg.toStringAsFixed(1)} kg';

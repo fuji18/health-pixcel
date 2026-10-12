@@ -134,6 +134,48 @@ void main() {
       expect(value(), isA<DashboardUnavailable>());
     });
 
+    test('4 種とも未許可 → DashboardNeedsPermission', () async {
+      fake.permissions = const HealthPermissions({});
+      await initial();
+      expect(value(), isA<DashboardNeedsPermission>());
+    });
+
+    test('体重だけ未許可', () async {
+      fake.permissions = const HealthPermissions({
+        HealthMetric.steps,
+        HealthMetric.sleep,
+        HealthMetric.heartRate,
+      });
+      await initial();
+      final v = value() as DashboardReady;
+      expect(v.steps, isA<MetricLoaded<dynamic>>());
+      expect(v.sleep, isA<MetricLoaded<dynamic>>());
+      expect(v.heartRate, isA<MetricLoaded<dynamic>>());
+      expect(v.weight, isA<MetricPermissionDenied<dynamic>>());
+      expect(fake.weightCalls, isEmpty);
+    });
+
+    test('体重だけ許可', () async {
+      fake.permissions = const HealthPermissions({HealthMetric.weight});
+      await initial();
+      final v = value() as DashboardReady;
+      expect(v.steps, isA<MetricPermissionDenied<dynamic>>());
+      expect(v.sleep, isA<MetricPermissionDenied<dynamic>>());
+      expect(v.heartRate, isA<MetricPermissionDenied<dynamic>>());
+      expect(v.weight, isA<MetricLoaded<dynamic>>());
+    });
+
+    test('体重の読み込みが unavailable → 再確認し、available なら readFailed', () async {
+      fake.weightErrors[today] = HealthErrorKind.unavailable;
+      await initial();
+      final v = value() as DashboardReady;
+      expect(
+        (v.weight as MetricFailed<dynamic>).kind,
+        HealthErrorKind.readFailed,
+      );
+      expect(fake.checkAvailabilityCalls, 2);
+    });
+
     test('読み取り失敗は片方だけ', () async {
       fake.stepsErrors[today] = HealthErrorKind.readFailed;
       await initial();
@@ -351,6 +393,21 @@ void main() {
         (value() as DashboardReady).heartRate,
         isA<MetricLoaded<dynamic>>(),
       );
+    });
+
+    test('体重の権限だけ変わった復帰で読み直す', () async {
+      fake.permissions = stepsOnly;
+      await initial();
+      expect(
+        (value() as DashboardReady).weight,
+        isA<MetricPermissionDenied<dynamic>>(),
+      );
+      fake.permissions = const HealthPermissions({
+        HealthMetric.steps,
+        HealthMetric.weight,
+      });
+      await controller().onResumed();
+      expect((value() as DashboardReady).weight, isA<MetricLoaded<dynamic>>());
     });
 
     test('想定外の例外の後の復帰は必ず再読み込み', () async {

@@ -6,6 +6,7 @@ import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
+import 'package:health_pixcel/domain/models/daily_weight.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
 
 import '../fakes/fake_health_repository.dart';
@@ -172,6 +173,41 @@ void main() {
       expect(result, isA<MetricFailed<DailyHeartRate>>());
       expect(
         (result as MetricFailed<DailyHeartRate>).kind,
+        HealthErrorKind.readFailed,
+      );
+    });
+  });
+
+  group('loadWeight', () {
+    test('日数分を新しい順に返し、記録なしは kg == null', () async {
+      fake.weights[DateTime(2026, 10, 6)] = 65.3;
+      final result = await service.loadWeight(service.currentRange());
+      final days = (result as MetricLoaded<DailyWeight>).days;
+      expect(days, hasLength(7));
+      expect(days.first.date, DateTime(2026, 10, 6));
+      expect(days.first.isToday, isTrue);
+      expect(days.first.kg, 65.3);
+      expect(days.last.date, DateTime(2026, 9, 30));
+      expect(days[1].kg, isNull);
+      expect(days[1].isToday, isFalse);
+    });
+
+    test('今日は [today, now)、それ以外は [day, nextDay)', () async {
+      await service.loadWeight(service.currentRange());
+      expect(fake.weightCalls, hasLength(7));
+      expect(fake.weightCalls.first, (DateTime(2026, 10, 6), now));
+      expect(fake.weightCalls[1], (
+        DateTime(2026, 10, 5),
+        DateTime(2026, 10, 6),
+      ));
+    });
+
+    test('1 日でも失敗 → MetricFailed', () async {
+      fake.weightErrors[DateTime(2026, 10, 3)] = HealthErrorKind.readFailed;
+      final result = await service.loadWeight(service.currentRange());
+      expect(result, isA<MetricFailed<DailyWeight>>());
+      expect(
+        (result as MetricFailed<DailyWeight>).kind,
         HealthErrorKind.readFailed,
       );
     });

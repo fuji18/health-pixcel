@@ -13,7 +13,7 @@ abstract interface class HealthRepository {
   /// データ種別ごとの権限状態。
   Future<HealthPermissions> checkPermissions();
 
-  /// 歩数・睡眠・心拍の READ 権限をまとめてリクエストし、リクエスト後の状態を返す。
+  /// 歩数・睡眠・心拍・体重の READ 権限をまとめてリクエストし、リクエスト後の状態を返す。
   Future<HealthPermissions> requestPermissions();
 
   /// ヘルスコネクトのアプリ権限設定画面を開く(ダイアログが出なくなった場合の逃げ道)。
@@ -32,6 +32,9 @@ abstract interface class HealthRepository {
 
   /// [start, end) の心拍の集計値。記録なしは null。失敗時は [HealthReadException] を投げる。
   Future<HeartRateStats?> readHeartRate(DateTime start, DateTime end);
+
+  /// [start, end) の最新の体重(kg)。記録なしは null。失敗時は [HealthReadException] を投げる。
+  Future<double?> readLatestWeight(DateTime start, DateTime end);
 }
 
 /// ヘルスデータの読み取り失敗。メッセージに健康データの値を含めない。

@@ -16,6 +16,7 @@ import 'package:health_pixcel/presentation/dashboard/dashboard_screen.dart';
 import 'package:health_pixcel/presentation/dashboard/dashboard_state.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/sleep_section.dart';
 import 'package:health_pixcel/presentation/dashboard/widgets/steps_section.dart';
+import 'package:health_pixcel/presentation/dashboard/widgets/weight_section.dart';
 import 'package:health_pixcel/presentation/goals/goal_settings_screen.dart';
 import 'package:health_pixcel/presentation/goals/goals_controller.dart';
 import 'package:health_pixcel/presentation/providers.dart';
@@ -146,7 +147,7 @@ void main() {
     fake.permissions = bothDenied;
     await pumpScreen(tester);
     await tester.pumpAndSettle();
-    expect(find.text('歩数・睡眠・心拍を表示するには、ヘルスコネクトの読み取り権限が必要です'), findsOneWidget);
+    expect(find.text('歩数・睡眠・心拍・体重を表示するには、ヘルスコネクトの読み取り権限が必要です'), findsOneWidget);
     expect(find.text('データの読み取りのみ行い、端末の外には送信しません'), findsOneWidget);
     expect(find.text('権限を許可する'), findsOneWidget);
     expect(find.text('ヘルスコネクトの設定を開く'), findsOneWidget);
@@ -189,7 +190,7 @@ void main() {
       '10/1(木)',
       '9/30(水)',
     ]) {
-      expect(find.text(label), findsNWidgets(3)); // 睡眠・歩数・心拍
+      expect(find.text(label), findsNWidgets(4)); // 睡眠・歩数・心拍・体重
     }
     expect(find.text('23:45→06:57'), findsOneWidget);
     expect(find.text('7時間12分'), findsOneWidget);
@@ -199,7 +200,7 @@ void main() {
     expect(find.text('3,210 歩'), findsOneWidget);
     expect(find.text('(途中)'), findsOneWidget);
     expect(find.text('8,432 歩'), findsOneWidget);
-    expect(find.text('記録なし'), findsNWidgets(17)); // 心拍の 7 日を含む
+    expect(find.text('記録なし'), findsNWidgets(24)); // 心拍・体重の 7 日を含む
     expect(
       tester.getTopLeft(find.text('歩数')).dy,
       lessThan(tester.getTopLeft(find.text('心拍')).dy),
@@ -220,13 +221,14 @@ void main() {
     fake.permissions = const HealthPermissions({
       HealthMetric.sleep,
       HealthMetric.heartRate,
+      HealthMetric.weight,
     });
     await pumpScreen(tester);
     await tester.pumpAndSettle();
     expect(find.text('歩数の権限が許可されていません'), findsOneWidget);
     expect(find.text('権限を許可する'), findsOneWidget);
     expect(find.text('ヘルスコネクトの設定を開く'), findsOneWidget);
-    expect(find.text('今日 10/6(火)'), findsNWidgets(2)); // 睡眠・心拍
+    expect(find.text('今日 10/6(火)'), findsNWidgets(3)); // 睡眠・心拍・体重
   });
 
   testWidgets('10 睡眠の読み取り失敗は睡眠セクションだけに出て再読み込みで回復する', (tester) async {
@@ -237,12 +239,12 @@ void main() {
     expect(find.text('データを読み込めませんでした'), findsOneWidget);
     expect(find.text('再読み込み'), findsOneWidget);
     expect(find.text('3,210 歩'), findsOneWidget);
-    expect(find.text('昨日 10/5(月)'), findsNWidgets(2)); // 歩数・心拍
+    expect(find.text('昨日 10/5(月)'), findsNWidgets(3)); // 歩数・心拍・体重
     fake.sleepError = null;
     await tester.tap(find.text('再読み込み'));
     await tester.pumpAndSettle();
     expect(find.text('データを読み込めませんでした'), findsNothing);
-    expect(find.text('今日 10/6(火)'), findsNWidgets(3));
+    expect(find.text('今日 10/6(火)'), findsNWidgets(4));
   });
 
   testWidgets('11 データなしの案内', (tester) async {
@@ -251,7 +253,7 @@ void main() {
     expect(find.text('ヘルスコネクトにデータがありません'), findsOneWidget);
     expect(find.text('Health Sync の同期設定を確認してください'), findsOneWidget);
     expect(find.text('再読み込み'), findsOneWidget);
-    expect(find.text('記録なし'), findsNWidgets(21));
+    expect(find.text('記録なし'), findsNWidgets(28));
   });
 
   testWidgets('12 コントローラが例外でも再読み込みで回復する', (tester) async {
@@ -332,7 +334,7 @@ void main() {
     await tester.tap(find.text('閉じる'));
     await tester.pumpAndSettle();
     expect(find.byType(PermissionRationaleScreen), findsNothing);
-    expect(find.text('歩数・睡眠・心拍を表示するには、ヘルスコネクトの読み取り権限が必要です'), findsOneWidget);
+    expect(find.text('歩数・睡眠・心拍・体重を表示するには、ヘルスコネクトの読み取り権限が必要です'), findsOneWidget);
   });
 
   final periodButton = find.byType(SegmentedButton<DisplayPeriod>);
@@ -409,7 +411,7 @@ void main() {
       tester.widget<SegmentedButton<DisplayPeriod>>(periodButton).selected,
       {DisplayPeriod.week},
     );
-    expect(find.text('9/30(水)'), findsNWidgets(3));
+    expect(find.text('9/30(水)'), findsNWidgets(4));
     expect(fake.stepsCalls.length, 7 + 30 + 7);
   });
 
@@ -569,6 +571,7 @@ void main() {
     fake.permissions = const HealthPermissions({
       HealthMetric.steps,
       HealthMetric.sleep,
+      HealthMetric.weight,
     });
     await pumpScreen(tester);
     await tester.pumpAndSettle();
@@ -629,6 +632,65 @@ void main() {
       min: 52,
       max: 128,
     );
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('35 体重だけ未許可なら体重セクションに案内を出し、他は表示される', (tester) async {
+    seedData();
+    fake.permissions = const HealthPermissions({
+      HealthMetric.steps,
+      HealthMetric.sleep,
+      HealthMetric.heartRate,
+    });
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('体重'), findsOneWidget);
+    expect(find.text('体重の権限が許可されていません'), findsOneWidget);
+    expect(find.text('権限を許可する'), findsOneWidget);
+    expect(find.text('ヘルスコネクトの設定を開く'), findsOneWidget);
+    expect(find.text('3,210 歩'), findsOneWidget);
+    expect(find.text('23:45→06:57'), findsOneWidget);
+    expect(find.byType(HeartRateSection), findsOneWidget);
+  });
+
+  testWidgets('36 体重の値の行・説明・記録なしの日', (tester) async {
+    seedData();
+    fake.weights[DateTime(2026, 10, 6)] = 65.3;
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('その日の最新の記録'), findsOneWidget);
+    expect(find.text('65.3 kg'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(WeightSection),
+        matching: find.text('記録なし'),
+      ),
+      findsNWidgets(6),
+    );
+  });
+
+  testWidgets('37 体重の読み取り失敗は体重セクション内に出る', (tester) async {
+    seedData();
+    fake.weightErrors[DateTime(2026, 10, 6)] = HealthErrorKind.readFailed;
+    await pumpScreen(tester);
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(WeightSection),
+        matching: find.text('データを読み込めませんでした'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('3,210 歩'), findsOneWidget);
+  });
+
+  testWidgets('38 文字を大きくしても体重の行があふれない', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    seedData();
+    fake.weights[DateTime(2026, 10, 6)] = 65.3;
     await pumpScreen(tester);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

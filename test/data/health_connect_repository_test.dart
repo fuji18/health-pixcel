@@ -109,6 +109,19 @@ HealthDataPoint _heart(DateTime from, num bpm) => HealthDataPoint(
   sourceName: 'n',
 );
 
+HealthDataPoint _weight(DateTime from, num kg) => HealthDataPoint(
+  uuid: 'u',
+  value: NumericHealthValue(numericValue: kg),
+  type: HealthDataType.WEIGHT,
+  unit: HealthDataUnit.KILOGRAM,
+  dateFrom: from,
+  dateTo: from,
+  sourcePlatform: HealthPlatformType.googleHealthConnect,
+  sourceDeviceId: 'd',
+  sourceId: 's',
+  sourceName: 'n',
+);
+
 Matcher _readException(HealthErrorKind kind) =>
     throwsA(isA<HealthReadException>().having((e) => e.kind, 'kind', kind));
 
@@ -170,14 +183,32 @@ void main() {
       );
     });
 
+    test('体重だけ未許可', () async {
+      fake.granted = {
+        HealthDataType.STEPS: true,
+        HealthDataType.SLEEP_SESSION: true,
+        HealthDataType.HEART_RATE: true,
+        HealthDataType.WEIGHT: false,
+      };
+      expect(
+        await repo.checkPermissions(),
+        const HealthPermissions({
+          HealthMetric.steps,
+          HealthMetric.sleep,
+          HealthMetric.heartRate,
+        }),
+      );
+    });
+
     test('種別ごとに個別に問い合わせる', () async {
       await repo.checkPermissions();
-      expect(fake.hasPermissionsCalls, hasLength(3));
+      expect(fake.hasPermissionsCalls, hasLength(4));
       final types = [for (final c in fake.hasPermissionsCalls) c.$1];
       expect(types, [
         [HealthDataType.STEPS],
         [HealthDataType.SLEEP_SESSION],
         [HealthDataType.HEART_RATE],
+        [HealthDataType.WEIGHT],
       ]);
       for (final c in fake.hasPermissionsCalls) {
         expect(c.$2, [HealthDataAccess.READ]);
@@ -191,11 +222,13 @@ void main() {
         HealthDataType.STEPS: false,
         HealthDataType.SLEEP_SESSION: false,
         HealthDataType.HEART_RATE: false,
+        HealthDataType.WEIGHT: false,
       };
       fake.grantedAfterRequest = {
         HealthDataType.STEPS: true,
         HealthDataType.SLEEP_SESSION: true,
         HealthDataType.HEART_RATE: true,
+        HealthDataType.WEIGHT: true,
       };
       expect(
         await repo.requestPermissions(),
@@ -203,14 +236,17 @@ void main() {
           HealthMetric.steps,
           HealthMetric.sleep,
           HealthMetric.heartRate,
+          HealthMetric.weight,
         }),
       );
       expect(fake.requestCalls.single.$1, [
         HealthDataType.STEPS,
         HealthDataType.SLEEP_SESSION,
         HealthDataType.HEART_RATE,
+        HealthDataType.WEIGHT,
       ]);
       expect(fake.requestCalls.single.$2, [
+        HealthDataAccess.READ,
         HealthDataAccess.READ,
         HealthDataAccess.READ,
         HealthDataAccess.READ,
@@ -316,6 +352,43 @@ void main() {
       fake.readError = UnsupportedError('x');
       await expectLater(
         repo.readHeartRate(start, end),
+        _readException(HealthErrorKind.unavailable),
+      );
+    });
+  });
+
+  group('readLatestWeight', () {
+    test('区間内の最新の記録を返す', () async {
+      fake.points = [
+        _weight(start.subtract(const Duration(minutes: 1)), 70), // 区間の前
+        _weight(start, 65.0), // start ちょうどは含む
+        _weight(start.add(const Duration(hours: 3)), 65.3),
+        _weight(end, 60), // end ちょうどは除外
+      ];
+      expect(await repo.readLatestWeight(start, end), 65.3);
+      expect(fake.dataCalls.single.$1, [HealthDataType.WEIGHT]);
+      expect(fake.dataCalls.single.$2, start);
+      expect(fake.dataCalls.single.$3, end);
+    });
+
+    test('start ちょうどだけ → その値', () async {
+      fake.points = [_weight(start, 65)];
+      expect(await repo.readLatestWeight(start, end), 65.0);
+    });
+
+    test('記録なし → null', () async {
+      expect(await repo.readLatestWeight(start, end), isNull);
+    });
+
+    test('例外の変換', () async {
+      fake.readError = StateError('x');
+      await expectLater(
+        repo.readLatestWeight(start, end),
+        _readException(HealthErrorKind.readFailed),
+      );
+      fake.readError = UnsupportedError('x');
+      await expectLater(
+        repo.readLatestWeight(start, end),
         _readException(HealthErrorKind.unavailable),
       );
     });
