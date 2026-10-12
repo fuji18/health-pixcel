@@ -247,6 +247,20 @@ jobs:
             echo "::warning::scripts/check-release-permissions.sh が無いため、リリース APK の権限検査を実行していません"
           fi
 
+      # 目安(docs/architecture.md「パフォーマンス要件」)を超えても PR は止めない。依存追加時の比較用に内訳をジョブサマリーへ出す
+      - name: Release APK size report
+        if: steps.flutter.outputs.present == 'true'
+        run: |
+          rc=0
+          bash scripts/report-apk-size.sh > "$RUNNER_TEMP/apk-size.md" || rc=$?
+          cat "$RUNNER_TEMP/apk-size.md"
+          cat "$RUNNER_TEMP/apk-size.md" >> "$GITHUB_STEP_SUMMARY"
+          case "$rc" in
+            0) ;;
+            1) echo "::warning::リリース APK の arm64-v8a 相当サイズが目安を超えています(docs/architecture.md「パフォーマンス要件」)" ;;
+            *) exit "$rc" ;;
+          esac
+
       # 上流の advisory 公開で無関係な PR が赤くならないよう非ブロッキングにする
       - name: Dependency audit (harness)
         continue-on-error: true

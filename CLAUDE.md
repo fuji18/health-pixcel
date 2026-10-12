@@ -22,7 +22,7 @@
 
 次のファイルはテンプレート所有(`owned`)だが、Flutter スタック向けに書き換えてある。`/sync-template` で上書きされたら、取り込み後に下記の差分を当て直す(経緯: `.steering/20261006-flutter-stack-migration/`)。
 
-- `.github/workflows/ci.yml`: `quality` ジョブ(Flutter の format / analyze / test / scripts / リリースビルド / 権限検査。`pubspec.yaml` 不在時はスキップ。secretlint は Node で継続)
+- `.github/workflows/ci.yml`: `quality` ジョブ(Flutter の format / analyze / test / scripts / リリースビルド / 権限検査 / APK サイズ報告(`Release APK size report`。目安超過は警告のみ)。`pubspec.yaml` 不在時はスキップ。secretlint は Node で継続)
 - `.claude/scripts/lint-on-edit.sh`: 対象を `*.dart` に、検査を `dart analyze <file>` に
 - `.claude/hooks/session-start.sh`: リモート時の `flutter pub get` と、serena 規模検知の対象拡張子 `*.dart`、`lib-*.sh` のディスク実行ビット検査を `core.fileMode=false` で飛ばす分岐(Windows マウントでの誤警告対策。#28)
 

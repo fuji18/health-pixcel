@@ -227,6 +227,7 @@ Closes #5
 - [ ] `bash scripts/check-layer-imports.sh` がパス
 - [ ] `bash scripts/check-privacy.sh` がパス
 - [ ] マニフェスト・依存・Gradle を変えた場合: `flutter build apk --release` → `bash scripts/check-release-permissions.sh` がパス
+- [ ] 依存を追加・更新した場合: CI のジョブサマリー「リリース APK サイズ」の arm64-v8a 相当を main の最新 CI 実行と比べ、増加量を PR 本文に書く(main の値は `gh run list --branch main --workflow ci.yml --limit 1` の実行のサマリーで見る)
 - [ ] `.steering/*/tasklist.md` の未完了項目がない(残る場合は PR 本文に明記)
 
 **PR テンプレート**: `.github/pull_request_template.md` を使う(概要 / 関連 Issue / ステアリング / 検証)。UI を変えた場合はスクリーンショットを添える。**スクリーンショットは実データではなくテスト用の値で撮るか、数値を隠す**(健康データを GitHub に上げない)
@@ -331,6 +332,7 @@ bash scripts/check-layer-imports.sh
 bash scripts/check-privacy.sh
 flutter build apk --release
 bash scripts/check-release-permissions.sh
+bash scripts/report-apk-size.sh   # サイズの内訳をジョブサマリーへ(目安超過は警告のみ)
 ```
 
 ## 開発環境セットアップ
