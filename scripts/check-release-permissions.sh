@@ -13,6 +13,9 @@ android.permission.health.READ_STEPS
 android.permission.health.READ_SLEEP
 android.permission.health.READ_HEART_RATE
 android.permission.health.READ_WEIGHT
+android.permission.health.READ_EXERCISE
+android.permission.health.READ_DISTANCE
+android.permission.health.READ_TOTAL_CALORIES_BURNED
 io.github.fuji18.healthpixcel.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 '
 APK=build/app/outputs/flutter-apk/app-release.apk
