@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:health_pixcel/domain/models/daily_exercise.dart';
 import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
@@ -155,6 +156,7 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         MetricResult<DailySleep> sleepResult,
         MetricResult<DailyHeartRate> heartRateResult,
         MetricResult<DailyWeight> weightResult,
+        MetricResult<DailyExercise> exerciseResult,
       ) = await (
         permissions.isGranted(HealthMetric.steps)
             ? service.loadSteps(r)
@@ -176,16 +178,23 @@ class DashboardController extends AsyncNotifier<DashboardState> {
             : Future<MetricResult<DailyWeight>>.value(
                 const MetricPermissionDenied<DailyWeight>(),
               ),
+        permissions.isGranted(HealthMetric.exercise)
+            ? service.loadExercise(r)
+            : Future<MetricResult<DailyExercise>>.value(
+                const MetricPermissionDenied<DailyExercise>(),
+              ),
       ).wait;
       var steps = stepsResult;
       var sleep = sleepResult;
       var heartRate = heartRateResult;
       var weight = weightResult;
+      var exercise = exerciseResult;
       // 5. 読み込み中の unavailable は利用可否を再確認する
       if (_isUnavailable(steps) ||
           _isUnavailable(sleep) ||
           _isUnavailable(heartRate) ||
-          _isUnavailable(weight)) {
+          _isUnavailable(weight) ||
+          _isUnavailable(exercise)) {
         final again = await repository.checkAvailability();
         if (again != HealthAvailability.available) {
           _lastSnapshot = (availability: again, permissions: null);
@@ -205,6 +214,11 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         if (_isUnavailable(weight)) {
           weight = const MetricFailed<DailyWeight>(HealthErrorKind.readFailed);
         }
+        if (_isUnavailable(exercise)) {
+          exercise = const MetricFailed<DailyExercise>(
+            HealthErrorKind.readFailed,
+          );
+        }
       }
       // 6.
       return DashboardReady(
@@ -214,6 +228,7 @@ class DashboardController extends AsyncNotifier<DashboardState> {
         sleep: sleep,
         heartRate: heartRate,
         weight: weight,
+        exercise: exercise,
       );
     } catch (_) {
       // 7. 想定外の例外。値をログに出さない。次の復帰で必ず読み直すため snapshot を捨てる
@@ -227,6 +242,7 @@ class DashboardController extends AsyncNotifier<DashboardState> {
           HealthErrorKind.readFailed,
         ),
         weight: const MetricFailed<DailyWeight>(HealthErrorKind.readFailed),
+        exercise: const MetricFailed<DailyExercise>(HealthErrorKind.readFailed),
       );
     }
   }

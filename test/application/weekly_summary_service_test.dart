@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:health_pixcel/application/weekly_summary_service.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
+import 'package:health_pixcel/domain/models/daily_exercise.dart';
 import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
+import 'package:health_pixcel/domain/models/exercise_session.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
@@ -208,6 +210,40 @@ void main() {
       expect(result, isA<MetricFailed<DailyWeight>>());
       expect(
         (result as MetricFailed<DailyWeight>).kind,
+        HealthErrorKind.readFailed,
+      );
+    });
+  });
+
+  group('loadExercise', () {
+    test('読み取り区間は [oldestDay, now](7 日と 30 日)', () async {
+      await service.loadExercise(service.currentRange());
+      await service.loadExercise(service.currentRange(dayCount: 30));
+      expect(fake.exerciseCalls, [
+        (DateTime(2026, 9, 30), now),
+        (DateTime(2026, 9, 7), now),
+      ]);
+    });
+
+    test('開始日に帰属した結果を返す', () async {
+      fake.exerciseSessions = [
+        ExerciseSession(
+          start: DateTime(2026, 10, 5, 23, 30),
+          end: DateTime(2026, 10, 6, 0, 30),
+        ),
+      ];
+      final result = await service.loadExercise(service.currentRange());
+      final days = (result as MetricLoaded<DailyExercise>).days;
+      expect(days, hasLength(7));
+      expect(days[0].hasRecord, isFalse);
+      expect(days[1].total, const Duration(minutes: 60));
+    });
+
+    test('失敗 → MetricFailed', () async {
+      fake.exerciseError = HealthErrorKind.readFailed;
+      final result = await service.loadExercise(service.currentRange());
+      expect(
+        (result as MetricFailed<DailyExercise>).kind,
         HealthErrorKind.readFailed,
       );
     });

@@ -1,5 +1,7 @@
 import 'package:health_pixcel/data/health_repository.dart';
 import 'package:health_pixcel/domain/date_range_builder.dart';
+import 'package:health_pixcel/domain/exercise_assignment.dart';
+import 'package:health_pixcel/domain/models/daily_exercise.dart';
 import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
@@ -8,7 +10,7 @@ import 'package:health_pixcel/domain/models/date_range.dart';
 import 'package:health_pixcel/domain/models/metric_result.dart';
 import 'package:health_pixcel/domain/sleep_assignment.dart';
 
-/// 直近 N 日(7 / 30)の歩数・睡眠・心拍・体重を組み立てる(機能設計書「WeeklySummaryService」)。
+/// 直近 N 日(7 / 30)の歩数・睡眠・心拍・体重・運動を組み立てる(機能設計書「WeeklySummaryService」)。
 class WeeklySummaryService {
   /// リポジトリと時計から作る。
   WeeklySummaryService(this._repository, this._clock);
@@ -100,6 +102,19 @@ class WeeklySummaryService {
             DailyWeight(date: range.days[i], kg: values[i], isToday: i == 0),
         ]),
       );
+    } on HealthReadException catch (e) {
+      return MetricFailed(e.kind);
+    }
+  }
+
+  /// 期間の日数分の運動。読み取り区間は [range.oldestDay, range.now](機能設計書 A6)。
+  Future<MetricResult<DailyExercise>> loadExercise(DateRange range) async {
+    try {
+      final sessions = await _repository.readExerciseSessions(
+        range.oldestDay,
+        range.now,
+      );
+      return MetricLoaded(assignExerciseToDays(range, sessions));
     } on HealthReadException catch (e) {
       return MetricFailed(e.kind);
     }

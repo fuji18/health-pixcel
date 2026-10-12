@@ -2,6 +2,7 @@ import 'package:health/health.dart';
 import 'package:health_pixcel/data/health_repository.dart';
 import 'package:health_pixcel/data/platform_channels.dart';
 import 'package:health_pixcel/domain/heart_rate_summary.dart';
+import 'package:health_pixcel/domain/models/exercise_session.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
@@ -20,13 +21,24 @@ class HealthConnectRepository implements HealthRepository {
   final Health _health;
   final HealthConnectSettingsChannel _settingsChannel;
 
-  /// 読み取るデータ種別と health の型の対応。
+  /// 読み取るデータ種別と、その種別の読み取りに要る health の型。
+  /// 運動記録は health 13.3.2 が距離・消費カロリー・歩数も読むため 4 型すべてが要る(design.md「前提」)。
   static const _types = {
-    HealthMetric.steps: HealthDataType.STEPS,
-    HealthMetric.sleep: HealthDataType.SLEEP_SESSION,
-    HealthMetric.heartRate: HealthDataType.HEART_RATE,
-    HealthMetric.weight: HealthDataType.WEIGHT,
+    HealthMetric.steps: [HealthDataType.STEPS],
+    HealthMetric.sleep: [HealthDataType.SLEEP_SESSION],
+    HealthMetric.heartRate: [HealthDataType.HEART_RATE],
+    HealthMetric.weight: [HealthDataType.WEIGHT],
+    HealthMetric.exercise: [
+      HealthDataType.WORKOUT,
+      HealthDataType.DISTANCE_DELTA,
+      HealthDataType.TOTAL_CALORIES_BURNED,
+      HealthDataType.STEPS,
+    ],
   };
+
+  /// リクエスト・問い合わせする型(重複なし。_types の出現順)。
+  static final _requestTypes = {for (final types in _types.values) ...types}
+      .toList(growable: false);
 
   // late final なので初回アクセス時に 1 度だけ configure() が走る(functional-design.md)。
   late final Future<void> _configured = _health.configure();
@@ -65,8 +77,8 @@ class HealthConnectRepository implements HealthRepository {
   @override
   Future<HealthPermissions> requestPermissions() => _guard(() async {
     await _health.requestAuthorization(
-      _types.values.toList(),
-      permissions: [for (final _ in _types.values) HealthDataAccess.READ],
+      _requestTypes,
+      permissions: [for (final _ in _requestTypes) HealthDataAccess.READ],
     );
     return _readPermissions();
   });
@@ -149,16 +161,40 @@ class HealthConnectRepository implements HealthRepository {
         ]);
       });
 
+  @override
+  Future<List<ExerciseSession>> readExerciseSessions(
+    DateTime start,
+    DateTime end,
+  ) => _guard(() async {
+    final points = await _health.getHealthDataFromTypes(
+      types: const [HealthDataType.WORKOUT],
+      startTime: start,
+      endTime: end,
+    );
+    // 距離・消費カロリーなど WorkoutHealthValue の中身は読まない(表示しない。PRD)
+    return List<ExerciseSession>.unmodifiable([
+      for (final p in points)
+        if (p.dateTo.isAfter(p.dateFrom))
+          ExerciseSession(start: p.dateFrom.toLocal(), end: p.dateTo.toLocal()),
+    ]);
+  });
+
   Future<HealthPermissions> _readPermissions() async {
-    // 種別ごとに許可を判別するため、個別に問い合わせる。null / false は未許可
-    final granted = <HealthMetric>{};
-    for (final entry in _types.entries) {
+    // 型ごとに個別に問い合わせる。null / false は未許可
+    final grantedTypes = <HealthDataType>{};
+    for (final type in _requestTypes) {
       final ok = await _health.hasPermissions(
-        [entry.value],
+        [type],
         permissions: const [HealthDataAccess.READ],
       );
-      if (ok == true) granted.add(entry.key);
+      if (ok == true) grantedTypes.add(type);
     }
-    return HealthPermissions(Set.unmodifiable(granted));
+    // 種別は、読み取りに要る型がすべて許可済みのときだけ許可
+    return HealthPermissions(
+      Set.unmodifiable({
+        for (final entry in _types.entries)
+          if (grantedTypes.containsAll(entry.value)) entry.key,
+      }),
+    );
   }
 }

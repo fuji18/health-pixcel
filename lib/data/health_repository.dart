@@ -1,3 +1,4 @@
+import 'package:health_pixcel/domain/models/exercise_session.dart';
 import 'package:health_pixcel/domain/models/health_status.dart';
 import 'package:health_pixcel/domain/models/heart_rate_stats.dart';
 import 'package:health_pixcel/domain/models/sleep_session.dart';
@@ -13,7 +14,7 @@ abstract interface class HealthRepository {
   /// データ種別ごとの権限状態。
   Future<HealthPermissions> checkPermissions();
 
-  /// 歩数・睡眠・心拍・体重の READ 権限をまとめてリクエストし、リクエスト後の状態を返す。
+  /// 歩数・睡眠・心拍・体重・運動記録の READ 権限をまとめてリクエストし、リクエスト後の状態を返す。
   Future<HealthPermissions> requestPermissions();
 
   /// ヘルスコネクトのアプリ権限設定画面を開く(ダイアログが出なくなった場合の逃げ道)。
@@ -35,6 +36,13 @@ abstract interface class HealthRepository {
 
   /// [start, end) の最新の体重(kg)。記録なしは null。失敗時は [HealthReadException] を投げる。
   Future<double?> readLatestWeight(DateTime start, DateTime end);
+
+  /// [start, end) と重なる運動記録(start / end はローカル時刻)。
+  /// 失敗時は [HealthReadException] を投げる。
+  Future<List<ExerciseSession>> readExerciseSessions(
+    DateTime start,
+    DateTime end,
+  );
 }
 
 /// ヘルスデータの読み取り失敗。メッセージに健康データの値を含めない。

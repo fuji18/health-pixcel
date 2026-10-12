@@ -1,3 +1,4 @@
+import 'package:health_pixcel/domain/models/daily_exercise.dart';
 import 'package:health_pixcel/domain/models/daily_heart_rate.dart';
 import 'package:health_pixcel/domain/models/daily_sleep.dart';
 import 'package:health_pixcel/domain/models/daily_steps.dart';
@@ -34,6 +35,7 @@ class DashboardReady extends DashboardState {
     required this.sleep,
     required this.heartRate,
     required this.weight,
+    required this.exercise,
   });
 
   /// 表示期間。range.days.length == period.dayCount。
@@ -54,22 +56,28 @@ class DashboardReady extends DashboardState {
   /// 体重の取得結果。
   final MetricResult<DailyWeight> weight;
 
+  /// 運動の取得結果。
+  final MetricResult<DailyExercise> exercise;
+
   /// F4 のデータなし案内を出すかどうか(機能設計書「isAllEmpty の定義」)。
   bool get isAllEmpty {
     final steps = this.steps;
     final sleep = this.sleep;
     final heartRate = this.heartRate;
     final weight = this.weight;
+    final exercise = this.exercise;
     if (steps is MetricFailed ||
         sleep is MetricFailed ||
         heartRate is MetricFailed ||
-        weight is MetricFailed) {
+        weight is MetricFailed ||
+        exercise is MetricFailed) {
       return false;
     }
     if (steps is! MetricLoaded<DailySteps> &&
         sleep is! MetricLoaded<DailySleep> &&
         heartRate is! MetricLoaded<DailyHeartRate> &&
-        weight is! MetricLoaded<DailyWeight>) {
+        weight is! MetricLoaded<DailyWeight> &&
+        exercise is! MetricLoaded<DailyExercise>) {
       return false;
     }
     final stepsEmpty = switch (steps) {
@@ -92,6 +100,16 @@ class DashboardReady extends DashboardState {
       MetricLoaded<DailyWeight>(:final days) => days.every((d) => d.kg == null),
       _ => true,
     };
-    return stepsEmpty && sleepEmpty && heartRateEmpty && weightEmpty;
+    final exerciseEmpty = switch (exercise) {
+      MetricLoaded<DailyExercise>(:final days) => days.every(
+        (d) => !d.hasRecord,
+      ),
+      _ => true,
+    };
+    return stepsEmpty &&
+        sleepEmpty &&
+        heartRateEmpty &&
+        weightEmpty &&
+        exerciseEmpty;
   }
 }
