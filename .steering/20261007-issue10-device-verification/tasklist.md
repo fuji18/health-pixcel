@@ -5,7 +5,9 @@
 ## フェーズ1: 準備
 
 - [x] 【C】steering(requirements / design / tasklist / results テンプレート)の作成
-- [ ] 【人】Health Sync の同期確認、リリース APK のビルドとインストール(design.md §0)
+- [x] 【C】計画後に増えた機能(#20〜#26)の扱いと arm64 ビルド方式(`--target-platform android-arm64`)を design.md に反映
+- [ ] 【人】Health Sync の同期確認(design.md §0)
+- [ ] 【人】fat APK と arm64 のみの APK を順に入れ、端末上のアプリサイズを記録(design.md §0)
 
 ## フェーズ2: 実機確認(結果は results.md へ)
 
@@ -22,6 +24,7 @@
 
 - [ ] 【C】results.md の判定(合否・不具合の振り分け。design.md §7)
 - [ ] 【C】睡眠時間の定義の結論を docs に反映(design.md §6)
+- [ ] 【C】`docs/development-guidelines.md`「実機確認の準備」を arm64 ビルドと `adb install` の手順に更新(design.md §0)
 - [ ] 【C】不具合修正(あれば。小さいものは `implement-ticket`、大きいものは別 Issue)
 
 ## フェーズ4: 完了

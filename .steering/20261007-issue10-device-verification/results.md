@@ -6,7 +6,8 @@
 - 端末 / OS: Pixel 10 / Android
 - ヘルスコネクトのバージョン:
 - アプリのコミット(`git rev-parse --short HEAD`):
-- ビルド: release
+- ビルド: release(`--target-platform android-arm64`)
+- 端末上のアプリサイズ(設定 > アプリ > ストレージ): fat APK MB / arm64 のみ MB
 
 ## チェックリスト
 

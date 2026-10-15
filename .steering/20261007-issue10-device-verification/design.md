@@ -4,25 +4,46 @@
 
 実機での作業手順と判定基準。コマンドは Windows の **Git Bash**(`scripts/*.sh` が `sh` のため)で、リポジトリのルートから実行する前提。パッケージ名は `io.github.fuji18.healthpixcel`。
 
+## 計画後に増えた機能の扱い(2026-10-15 追記)
+
+本ファイルの作成後に P1/P2 の #20〜#26(7/30 日切替・グラフ・目標・心拍・体重・運動記録)がマージされた。#10 のスコープは MVP のままとし、次のとおり扱う(司令塔判断。ユーザー承認済み)。
+
+- **C1**: 権限ダイアログで求められる種類が増えている(歩数・睡眠に加えて心拍・体重・運動記録、運動記録の読み取りに要る距離・消費カロリー)。**すべて許可する**
+- **C7(logcat)**: プライバシー要件の確認なので MVP 外の機能も対象にする。歩数・睡眠に加え、**心拍(bpm)・体重(kg)の値**も検索する(§5)
+- **C2(突き合わせ)**: MVP の範囲(歩数・睡眠・7 日表示)のまま。30 日表示・グラフ・目標・心拍・体重・運動は突き合わせない
+- C3 の「片方の権限を外す」は歩数・睡眠の 2 種で行う(他の種類の権限は許可したままでよい)
+
 ## 0. 準備
 
 1. `docs/development-guidelines.md`「実機確認の準備」の 1〜2 を済ませる(Health Sync → ヘルスコネクトの同期、データの存在確認)
-2. main の最新を取り込み、リリース APK を作って入れる。**計測・突き合わせはすべてリリースビルドで行う**(デバッグビルドは JIT で遅く、計測値が意味を持たない)
+2. 開発者向けオプションで USB デバッグと「タップを表示」をオンにする(§3 の計測で使う)
+3. main の最新を取り込み、**fat APK → arm64 のみの APK の順に入れて、端末上のアプリサイズを比べる**。**計測・突き合わせはすべて arm64 のみのリリースビルドで行う**(デバッグビルドは JIT で遅く、計測値が意味を持たない)
 
    ```bash
-   git pull
+   git merge origin/main
    flutter clean && flutter pub get
+
+   # (a) fat APK: サイズ比較のためだけに入れる
    flutter build apk --release
-   flutter install --release
+   adb install -r build/app/outputs/flutter-apk/app-release.apk
+   #   → 設定 > アプリ > health pixcel > ストレージ の「アプリのサイズ」を results.md に書く
+
+   # (b) arm64 のみ: 以降の確認はすべてこちらで行う
+   flutter build apk --release --target-platform android-arm64
+   adb uninstall io.github.fuji18.healthpixcel   # C1(初回起動)のために消す
+   adb install build/app/outputs/flutter-apk/app-release.apk
+   #   → 同じ画面でアプリのサイズを results.md に書く(#31 の実測: fat 50.3MB / arm64-v8a 相当 18.2MB)
    ```
 
-3. 既にアプリが入っていて権限を許可済みなら、初回起動(C1)の確認のために一度アンインストールしてから入れ直す(`adb uninstall io.github.fuji18.healthpixcel`)
+   - **方式は `--target-platform android-arm64` に決定**(`--split-per-abi` は採らない)。出力先が `app-release.apk` のまま変わらず、`scripts/check-release-permissions.sh`(§4)と APK Analyzer の手順をパス変更なしで使えるため。`--split-per-abi` だと `app-arm64-v8a-release.apk` になり両方の手順が合わなくなる
+   - インストールは `flutter install` ではなく `adb install` で APK のパスを明示する(どの APK が入ったかを曖昧にしない)
+   - CI の権限検査・サイズ報告は fat APK のまま(#31)。変えない
 
 ## 1. チェックリスト(results.md の項目番号と対応)
 
 | # | 項目 | 手順 | 合格基準 |
 | --- | --- | --- | --- |
-| C1 | 初回起動 → 権限許可 → 再起動なしで表示(F1) | 入れ直した直後に起動 → 案内画面 → 「権限を許可する」→ 歩数・睡眠を両方許可 | 案内画面が出る。許可後、アプリを再起動せずに 7 日分が表示される |
+| C1 | 初回起動 → 権限許可 → 再起動なしで表示(F1) | 入れ直した直後に起動 → 案内画面 → 「権限を許可する」→ 求められた権限をすべて許可(歩数・睡眠・心拍・体重・運動記録・距離・消費カロリー) | 案内画面が出る。許可後、アプリを再起動せずに 7 日分が表示される |
 | C2 | 表示の正確さ(KPI) | §2 の突き合わせ | §2 の判定に従う |
 | C3 | 片方の権限を外す | ヘルスコネクト設定 → アプリの権限 → health pixcel → 「睡眠」だけオフ → アプリに戻る。続けて睡眠をオンに戻し「歩数」だけオフ → 戻る。最後に両方オンに戻す | 外した側のセクションだけ案内に変わり、もう片方は表示されたまま。オンに戻すと復帰時に表示が戻る |
 | C4 | 機内モード・Health Sync 停止中 | (a) 機内モードで起動・下に引いて再読み込み (b) 設定 → アプリ → Health Sync → 強制停止 の状態で起動・再読み込み | クラッシュしない。データがあれば表示、無い日は「記録なし」 |
@@ -65,6 +86,8 @@ adb pull /sdcard/cold1.mp4
 
 ## 4. リリース権限の検査(C5)
 
+§0 (b) の arm64 のみの APK に対して行う(出力先は fat と同じ `app-release.apk`)。
+
 ```bash
 bash scripts/check-release-permissions.sh; echo "exit=$?"
 ```
@@ -80,7 +103,7 @@ adb logcat --pid=$(adb shell pidof io.github.fuji18.healthpixcel) > logcat-app.t
 
 - アプリを起動してから上を実行し、表示 → 下に引いて再読み込み ×2 → C3 の権限変更からの復帰 を行ってから Ctrl+C
 - プロセス外(ヘルスコネクト本体)のログは対象外。プラグインの Kotlin 側は同じプロセスなので含まれる
-- `logcat-app.txt` を開き、画面に出ている歩数(例: `8432` と `8,432` の両方)、就寝・起床時刻(`23:30` 等)、睡眠の分数・秒数・エポックミリ秒らしき 13 桁の数値を検索する。**1 件でもあれば行を results.md に貼らず**、「どのタグの行か」だけ書いて司令塔に戻す
+- `logcat-app.txt` を開き、画面に出ている歩数(例: `8432` と `8,432` の両方)、就寝・起床時刻(`23:30` 等)、睡眠の分数・秒数・エポックミリ秒らしき 13 桁の数値、**心拍の値(例: `72`。`bpm` も併せて検索)・体重の値(例: `63.4`。`kg` も併せて検索)**を検索する。**1 件でもあれば行を results.md に貼らず**、「どのタグの行か」だけ書いて司令塔に戻す
 - `logcat-app.txt` は確認後に削除する(リポジトリに入れない)
 
 ## 6. 睡眠時間の定義の結論(docs への反映。司令塔が行う)
@@ -99,6 +122,6 @@ adb logcat --pid=$(adb shell pidof io.github.fuji18.healthpixcel) > logcat-app.t
 
 ## 8. 完了後の PR
 
-- 変更物: `.steering/20261007-issue10-device-verification/`(results.md を含む)、docs(§6)、不具合修正があればそのコード
+- 変更物: `.steering/20261007-issue10-device-verification/`(results.md を含む)、docs(§6)、`docs/development-guidelines.md`「実機確認の準備」(§0 の arm64 ビルドと `adb install` の手順に揃える)、不具合修正があればそのコード
 - 録画・logcat・スクリーンショットはコミットしない(健康データを含むため)
 - **リポジトリは public。results.md に健康データの生の値(歩数・就寝/起床時刻・睡眠時間)と実日付を書かない。** 書くのは差分(歩数の差・時刻の差(分)・睡眠時間の差率)と合否・原因だけで、日付は「D0(今日)〜D-6」で表す。Issue の「差異は原因とともに記録」はこれで満たす(司令塔判断。PRD「セキュリティ・プライバシー」の、健康データを外に出さない方針に合わせる)
