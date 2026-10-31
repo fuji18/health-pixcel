@@ -18,9 +18,9 @@
 
 ## プロジェクト固有ルール
 
-### テンプレート所有ファイルへの Flutter 差分(`/sync-template` 時に当て直す)
+### テンプレート由来ファイルへの Flutter 差分
 
-次のファイルはテンプレート所有(`owned`)だが、Flutter スタック向けに書き換えてある。`/sync-template` で上書きされたら、取り込み後に下記の差分を当て直す(経緯: `.steering/20261006-flutter-stack-migration/`)。
+次のファイルはテンプレート由来だが、Flutter スタック向けに書き換えてある(経緯: `.steering/20261006-flutter-stack-migration/`)。いずれも manifest の **merge** 区分なので、`/sync-template`(同期スクリプト)は 3-way マージでこの差分を保ったままテンプレートの変更を取り込む。競合したときは下記を基準に解消する。
 
 - `.github/workflows/ci.yml`: `quality` ジョブ(Flutter の format / analyze / test / scripts / リリースビルド / 権限検査 / APK サイズ報告(`Release APK size report`。目安超過は警告のみ)。`pubspec.yaml` 不在時はスキップ。secretlint は Node で継続)
 - `.claude/scripts/lint-on-edit.sh`: 対象を `*.dart` に、検査を `dart analyze <file>` に
@@ -74,7 +74,7 @@
 
 ### テンプレート更新の取り込み
 
-テンプレート(`claude-code-template`)側で共通ルール・コマンド・スキル・ハーネスが更新されたら、**`/sync-template`** で差分を取り込む。同期対象・除外は `.claude/template-manifest.json` が単一ソース。
+テンプレート(`claude-codex-template`)側で共通ルール・コマンド・スキル・ハーネスが更新されたら、**`/sync-template`** で差分を取り込む。同期対象・除外は `.claude/template-manifest.json` が単一ソース。
 
 - 月次の `template-update-check` ワークフロー(毎月1日)が、テンプレートに未取り込みの更新があれば Issue を立てる
 - `[manual]` 印の変更はプロジェクト側の対応が要るため、`/sync-template` の提示に従って個別に判断する
