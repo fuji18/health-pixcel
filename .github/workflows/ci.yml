@@ -128,6 +128,28 @@ jobs:
             exit 1
           fi
 
+      # テンプレート本体でだけ働く検査: 追跡ファイルが template-manifest.json の
+      # どの区分にも入っていなければ落とす(区分に無いファイルは /sync-template で
+      # 下流に届かない)。下流プロジェクトではスクリプト側が何もせず exit 0 する。
+      - name: Check template manifest coverage
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          if ! MISSING="$(bash .claude/scripts/check-manifest-coverage.sh)"; then
+            printf '%s\n' "$MISSING" | while IFS= read -r line; do
+              [ -n "$line" ] && echo "::error::$line"
+            done
+            exit 1
+          fi
+
+      # テンプレート同期スクリプトの動作確認(一時リポジトリ内で完結。ネットワーク不要)。
+      # 上書き・ローカル変更の保持・JSON の構造マージ・競合検出・manifest の更新を検査する
+      - name: Test template sync script
+        run: |
+          if [ -f .claude/scripts/test-sync-template.sh ]; then
+            bash .claude/scripts/test-sync-template.sh
+          fi
+
       # 委託禁止領域の単一ソース(delegate-codex.sh の FORBIDDEN_PATHS)と
       # .claude/rules/lead/delegation-policy.md の一覧のずれを**双方向**で検出する。
       # マーカーを持たない旧版の delegation-policy.md を抱えた下流プロジェクトで

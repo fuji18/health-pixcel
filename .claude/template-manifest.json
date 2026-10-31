@@ -2,8 +2,8 @@
   "$comment": "テンプレート追従の単一ソース。/sync-template と .github/workflows/template-update-check.yml が参照する。owned=上書き / merge=手動統合 / never=触らない。パスが複数に該当する場合は**最も具体的な(長い)エントリが勝つ**(例: .claude/scripts/ は owned だが .claude/scripts/lint-on-edit.sh は merge)。同じ長さなら owned > merge > never。末尾が / のエントリはディレクトリ配下すべてを指す。どの区分にも無い追跡ファイルはテンプレート本体の CI(check-manifest-coverage.sh)が落とす。syncedAt はテンプレート側の commit SHA(未同期なら null)。",
   "templateRepo": "https://github.com/fuji18/claude-codex-template.git",
   "templateBranch": "main",
-  "syncedAt": "fd3e5010cc755e82f6369a2fab0ff25c65e1ce1d",
-  "syncedDate": "2026-09-09",
+  "syncedAt": "ee455888653ecb4ea3cf4815cccc3dd355cb389e",
+  "syncedDate": "2026-10-31",
   "owned": [
     ".claude/rules/",
     ".claude/commands/",
@@ -38,7 +38,8 @@
     ".claude/hooks/session-start.sh",
     ".claude/scripts/lint-on-edit.sh",
     ".prettierignore",
-    ".secretlintignore"
+    ".secretlintignore",
+    ".claude/autopilot.json"
   ],
   "never": [
     "CLAUDE.md",
